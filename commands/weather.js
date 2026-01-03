@@ -68,14 +68,14 @@ module.exports = {
                     .setDescription(`${weatherIcon} **${weather.weather[0].description.charAt(0).toUpperCase() + weather.weather[0].description.slice(1)}**`)
                     .addFields(
                         { name: '🌡️ Температура', value: `${Math.round(main.temp)}°C`, inline: true },
-                        { name: '高低 Ощущается как', value: `${Math.round(main.feels_like)}°C`, inline: true },
+                        { name: '高低 Oщущается как', value: `${Math.round(main.feels_like)}°C`, inline: true },
                         { name: '📈 Максимальная темп.', value: `${Math.round(main.temp_max)}°C`, inline: true },
                         { name: '📉 Минимальная темп.', value: `${Math.round(main.temp_min)}°C`, inline: true },
                         { name: '💧 Влажность', value: `${main.humidity}%`, inline: true },
                         { name: '💨 Ветер', value: `${wind ? wind.speed + ' м/с' : 'Нет данных'}`, inline: true },
                         { name: '👁️ Видимость', value: weather.visibility ? `${weather.visibility / 1000} км` : 'Нет данных', inline: true },
-                        { name: '🌅 Восход', value: `<t:${sys.sunrise}:t>`, inline: true },
-                        { name: '🌇 Закат', value: `<t:${sys.sunset}:t>`, inline: true }
+                        { name: '🌅 Восход', value: `<t:${Math.floor(sys.sunrise)}:t>`, inline: true },
+                        { name: '🌇 Закат', value: `<t:${Math.floor(sys.sunset)}:t>`, inline: true }
                     )
                     .setThumbnail(iconUrl)
                     .setColor('#87CEEB')
@@ -101,7 +101,7 @@ module.exports = {
             console.error('Ошибка при получении погоды:', error);
             
             // Проверяем, является ли ошибка связанной с отсутствием города
-            if (error.response && error.response.data && error.response.data.cod === '404') {
+            if (error.response && error.response.data.cod === '404') {
                 const notFoundEmbed = new EmbedBuilder()
                     .setTitle('❌ Город не найден')
                     .setDescription(`Не удалось найти погоду для **${city}**. Проверьте название города и попробуйте снова.`)

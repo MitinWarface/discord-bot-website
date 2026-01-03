@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Путь к файлу с тикетами
-const ticketsPath = path.join(__dirname, '../tickets.json');
+const ticketsPath = path.join(__dirname, '../System/tickets.json');
 
 // Загрузка тикетов
 function loadTickets() {
@@ -67,11 +67,11 @@ module.exports = {
                     option.setName('user')
                         .setDescription('Пользователь для удаления')
                         .setRequired(true))),
-    
+
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const tickets = loadTickets();
-        
+
         switch (subcommand) {
             case 'create':
                 await handleCreateTicket(interaction, tickets);
@@ -92,16 +92,16 @@ module.exports = {
     }
 };
 
-async function handleCreateTicket(interaction) {
+async function handleCreateTicket(interaction, tickets) {
     const subject = interaction.options.getString('subject');
     const userId = interaction.user.id;
     const guild = interaction.guild;
-    
+
     try {
-        // Создаем приватный канал для тикета
+        // Создаем приватный текстовый канал для тикета
         const ticketChannel = await guild.channels.create({
             name: `ticket-${interaction.user.username}-${Date.now()}`,
-            type: 2, // Приватный текстовый канал
+            type: 0, // Text channel
             parent: interaction.channel.parent, // Создаем в той же категории, что и текущий канал
             permissionOverwrites: [
                 {
@@ -119,7 +119,7 @@ async function handleCreateTicket(interaction) {
             ],
             topic: `Тикет от ${interaction.user.tag} | Тема: ${subject}`
         });
-        
+
         // Создаем embed с информацией о тикете
         const ticketEmbed = new EmbedBuilder()
             .setTitle('📩 Новый тикет')
@@ -131,7 +131,7 @@ async function handleCreateTicket(interaction) {
             )
             .setColor('#8b00ff')
             .setTimestamp();
-        
+
         // Создаем кнопки для управления тикетом
         const row = new ActionRowBuilder()
             .addComponents(
@@ -151,14 +151,14 @@ async function handleCreateTicket(interaction) {
                     .setStyle(ButtonStyle.Secondary)
                     .setEmoji('❌')
             );
-        
+
         // Отправляем сообщение в тикет с кнопками
         const ticketMessage = await ticketChannel.send({
             content: `<@${userId}>`,
             embeds: [ticketEmbed],
             components: [row]
         });
-        
+
         // Отправляем подтверждение пользователю
         const confirmEmbed = new EmbedBuilder()
             .setTitle('✅ Тикет создан')
@@ -169,9 +169,9 @@ async function handleCreateTicket(interaction) {
             )
             .setColor('#00ff00')
             .setTimestamp();
-        
-        await interaction.reply({ embeds: [confirmEmbed], ephemeral: true });
-        
+
+        await interaction.reply({ embeds: [confirmEmbed] });
+
         // Сохраняем информацию о тикете
         const newTicket = {
             id: ticketChannel.id,
@@ -182,45 +182,45 @@ async function handleCreateTicket(interaction) {
             status: 'open',
             messages: []
         };
-        
+
         tickets.tickets.push(newTicket);
         saveTickets(tickets);
-        
+
     } catch (error) {
         console.error('Ошибка при создании тикета:', error);
-        
+
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ Ошибка')
             .setDescription('Произошла ошибка при создании тикета. Пожалуйста, попробуйте снова.')
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 }
 
 async function handleCloseTicket(interaction, tickets) {
     const ticketId = interaction.options.getString('ticket_id');
-    
+
     // Находим тикет
     const ticketIndex = tickets.tickets.findIndex(t => t.channelId === ticketId);
-    
+
     if (ticketIndex === -1) {
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ Ошибка')
             .setDescription(`Тикет с ID **${ticketId}** не найден!`)
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
-    
+
     const ticket = tickets.tickets[ticketIndex];
-    
+
     try {
         // Получаем канал тикета
         const ticketChannel = interaction.guild.channels.cache.get(ticket.channelId);
-        
+
         if (ticketChannel) {
             // Архивируем сообщения из тикета
             const messages = await ticketChannel.messages.fetch({ limit: 100 });
@@ -229,7 +229,7 @@ async function handleCloseTicket(interaction, tickets) {
                 content: msg.content,
                 timestamp: msg.createdAt.toISOString()
             }));
-            
+
             // Добавляем информацию о закрытии тикета
             const closeEmbed = new EmbedBuilder()
                 .setTitle('🔒 Тикет закрыт')
@@ -240,15 +240,15 @@ async function handleCloseTicket(interaction, tickets) {
                 )
                 .setColor('#808080')
                 .setTimestamp();
-            
+
             await ticketChannel.send({ embeds: [closeEmbed] });
-            
+
             // Переименовываем канал в архивный
             await ticketChannel.setName(`closed-${ticketChannel.name}`);
             await ticketChannel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
                 ViewChannel: false
             });
-            
+
             // Перемещаем тикет в закрытые
             const closedTicket = {
                 ...ticket,
@@ -256,71 +256,71 @@ async function handleCloseTicket(interaction, tickets) {
                 closedBy: interaction.user.id,
                 messages: messageLog
             };
-            
+
             tickets.closedTickets.push(closedTicket);
             tickets.tickets.splice(ticketIndex, 1);
             saveTickets(tickets);
-            
+
             const successEmbed = new EmbedBuilder()
                 .setTitle('✅ Тикет закрыт')
                 .setDescription(`Тикет **${ticket.subject}** (ID: ${ticketId}) успешно закрыт!`)
                 .setColor('#00ff00')
                 .setTimestamp();
-            
+
             await interaction.reply({ embeds: [successEmbed] });
         } else {
             // Если канал не найден, просто удаляем тикет из списка
             tickets.tickets.splice(ticketIndex, 1);
             saveTickets(tickets);
-            
+
             const successEmbed = new EmbedBuilder()
                 .setTitle('✅ Тикет удален')
                 .setDescription(`Тикет **${ticket.subject}** (ID: ${ticketId}) был удален из списка (канал не найден)`)
                 .setColor('#00ff00')
                 .setTimestamp();
-            
+
             await interaction.reply({ embeds: [successEmbed] });
         }
     } catch (error) {
         console.error('Ошибка при закрытии тикета:', error);
-        
+
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ Ошибка')
             .setDescription('Произошла ошибка при закрытии тикета.')
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 }
 
 async function handleListTickets(interaction, tickets) {
     const openTickets = tickets.tickets;
-    
+
     if (openTickets.length === 0) {
         const emptyEmbed = new EmbedBuilder()
             .setTitle('📋 Открытые тикеты')
             .setDescription('Нет открытых тикетов.')
             .setColor('#8b00ff')
             .setTimestamp();
-        
+
         return await interaction.reply({ embeds: [emptyEmbed], ephemeral: true });
     }
-    
+
     const ticketsEmbed = new EmbedBuilder()
         .setTitle('📋 Открытые тикеты')
         .setDescription(`Всего открытых тикетов: **${openTickets.length}**`)
         .setColor('#8b00ff')
         .setTimestamp();
-    
+
     // Добавляем информацию о первых 25 тикетах (ограничение embed)
     const ticketsToShow = openTickets.slice(0, 25);
-    
+
     for (const ticket of ticketsToShow) {
         try {
             const user = await interaction.guild.members.fetch(ticket.userId).catch(() => null);
             const channel = interaction.guild.channels.cache.get(ticket.channelId);
-            
+
             ticketsEmbed.addFields({
                 name: `#${ticket.id.substring(0, 6)}`,
                 value: `**Пользователь:** ${user ? `<@${ticket.userId}>` : 'Неизвестно'}\n**Тема:** ${ticket.subject}\n**Канал:** ${channel ? `<#${ticket.channelId}>` : 'Канал удален'}\n**Дата создания:** <t:${Math.floor(new Date(ticket.createdAt).getTime()/1000)}:R>`,
@@ -335,72 +335,72 @@ async function handleListTickets(interaction, tickets) {
             });
         }
     }
-    
+
     if (openTickets.length > 25) {
         ticketsEmbed.setFooter({ text: `Показаны первые 25 тикетов из ${openTickets.length}`, iconURL: interaction.client.user.displayAvatarURL() });
     } else {
         ticketsEmbed.setFooter({ text: `Всего тикетов: ${openTickets.length}`, iconURL: interaction.client.user.displayAvatarURL() });
     }
-    
+
     await interaction.reply({ embeds: [ticketsEmbed], ephemeral: true });
 }
 
 async function handleAddUser(interaction, tickets) {
     const ticketId = interaction.options.getString('ticket_id');
     const userToAdd = interaction.options.getUser('user');
-    
+
     // Проверяем, является ли пользователь администратором или создателем тикета
     const ticket = tickets.tickets.find(t => t.channelId === ticketId);
-    
+
     if (!ticket) {
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ Ошибка')
             .setDescription(`Тикет с ID **${ticketId}** не найден!`)
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
-    
+
     if (interaction.user.id !== ticket.userId && !interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
         const permError = new EmbedBuilder()
             .setTitle('❌ Нет прав')
             .setDescription('У вас нет прав для добавления участников в этот тикет!')
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         return await interaction.reply({ embeds: [permError], ephemeral: true });
     }
-    
+
     try {
         // Получаем канал тикета
         const ticketChannel = interaction.guild.channels.cache.get(ticket.channelId);
-        
+
         if (!ticketChannel) {
             const channelError = new EmbedBuilder()
                 .setTitle('❌ Ошибка')
                 .setDescription('Канал тикета не найден!')
                 .setColor('#ff0000')
                 .setTimestamp();
-            
+
             return await interaction.reply({ embeds: [channelError], ephemeral: true });
         }
-        
+
         // Добавляем пользователя в канал
         await ticketChannel.permissionOverwrites.edit(userToAdd, {
             ViewChannel: true,
             SendMessages: true,
             ReadMessageHistory: true
         });
-        
+
         const successEmbed = new EmbedBuilder()
             .setTitle('✅ Участник добавлен')
             .setDescription(`Пользователь <@${userToAdd.id}> добавлен в тикет <#${ticketChannel.id}>`)
             .setColor('#00ff00')
             .setTimestamp();
-        
+
         await interaction.reply({ embeds: [successEmbed] });
-        
+
         // Отправляем уведомление пользователю, которого добавили
         try {
             const notifyEmbed = new EmbedBuilder()
@@ -412,7 +412,7 @@ async function handleAddUser(interaction, tickets) {
                 )
                 .setColor('#8b00ff')
                 .setTimestamp();
-            
+
             await userToAdd.send({ embeds: [notifyEmbed] });
         } catch (error) {
             // Не удалось отправить личное сообщение
@@ -420,13 +420,13 @@ async function handleAddUser(interaction, tickets) {
         }
     } catch (error) {
         console.error('Ошибка при добавлении пользователя в тикет:', error);
-        
+
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ Ошибка')
             .setDescription('Произошла ошибка при добавлении пользователя в тикет.')
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 }
@@ -434,30 +434,30 @@ async function handleAddUser(interaction, tickets) {
 async function handleRemoveUser(interaction, tickets) {
     const ticketId = interaction.options.getString('ticket_id');
     const userToRemove = interaction.options.getUser('user');
-    
+
     // Проверяем, является ли пользователь администратором или создателем тикета
     const ticket = tickets.tickets.find(t => t.channelId === ticketId);
-    
+
     if (!ticket) {
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ Ошибка')
             .setDescription(`Тикет с ID **${ticketId}** не найден!`)
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
-    
+
     if (interaction.user.id !== ticket.userId && !interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
         const permError = new EmbedBuilder()
             .setTitle('❌ Нет прав')
             .setDescription('У вас нет прав для удаления участников из этого тикета!')
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         return await interaction.reply({ embeds: [permError], ephemeral: true });
     }
-    
+
     // Нельзя удалить создателя тикета
     if (userToRemove.id === ticket.userId) {
         const ownerError = new EmbedBuilder()
@@ -465,46 +465,46 @@ async function handleRemoveUser(interaction, tickets) {
             .setDescription('Нельзя удалить создателя тикета!')
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         return await interaction.reply({ embeds: [ownerError], ephemeral: true });
     }
-    
+
     try {
         // Получаем канал тикета
         const ticketChannel = interaction.guild.channels.cache.get(ticket.channelId);
-        
+
         if (!ticketChannel) {
             const channelError = new EmbedBuilder()
                 .setTitle('❌ Ошибка')
                 .setDescription('Канал тикета не найден!')
                 .setColor('#ff0000')
                 .setTimestamp();
-            
+
             return await interaction.reply({ embeds: [channelError], ephemeral: true });
         }
-        
+
         // Удаляем права пользователя в канале
         await ticketChannel.permissionOverwrites.delete(userToRemove);
-        
+
         const successEmbed = new EmbedBuilder()
             .setTitle('✅ Участник удален')
             .setDescription(`Пользователь <@${userToRemove.id}> удален из тикета <#${ticketChannel.id}>`)
             .setColor('#00ff00')
             .setTimestamp();
-        
+
         await interaction.reply({ embeds: [successEmbed] });
-        
+
         // Отправляем уведомление пользователю, которого удалили
         try {
             const notifyEmbed = new EmbedBuilder()
-                .setTitle('📩 Вас удалили из тикета')
+                .setTitle('📤 Вас удалили из тикета')
                 .setDescription(`Вы были удалены из тикета **${ticket.subject}** на сервере **${interaction.guild.name}**`)
                 .addFields(
                     { name: 'Канал', value: `<#${ticketChannel.id}>`, inline: true }
                 )
                 .setColor('#8b00ff')
                 .setTimestamp();
-            
+
             await userToRemove.send({ embeds: [notifyEmbed] });
         } catch (error) {
             // Не удалось отправить личное сообщение
@@ -512,13 +512,13 @@ async function handleRemoveUser(interaction, tickets) {
         }
     } catch (error) {
         console.error('Ошибка при удалении пользователя из тикета:', error);
-        
+
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ Ошибка')
             .setDescription('Произошла ошибка при удалении пользователя из тикета.')
             .setColor('#ff0000')
             .setTimestamp();
-        
+
         await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 }

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -35,43 +35,75 @@ function getXpForLevel(level) {
 }
 
 // Добавление XP пользователю
-function addXP(userId, xpToAdd) {
+function addXP(userId, xpToAdd, guildId) {
     const levelsData = loadLevelsData();
     
-    if (!levelsData[userId]) {
-        levelsData[userId] = {
+    if (!levelsData[guildId]) {
+        levelsData[guildId] = {};
+    }
+    
+    if (!levelsData[guildId][userId]) {
+        levelsData[guildId][userId] = {
             xp: 0,
             level: 1,
             lastMessage: Date.now()
         };
     }
     
-    levelsData[userId].xp += xpToAdd;
-    levelsData[userId].lastMessage = Date.now();
+    levelsData[guildId][userId].xp += xpToAdd;
+    levelsData[guildId][userId].lastMessage = Date.now();
     
     // Обновляем уровень, если нужно
-    const newLevel = getLevelFromXP(levelsData[userId].xp);
-    if (newLevel > levelsData[userId].level) {
-        levelsData[userId].level = newLevel;
+    const newLevel = getLevelFromXP(levelsData[guildId][userId].xp);
+    if (newLevel > levelsData[guildId][userId].level) {
+        levelsData[guildId][userId].level = newLevel;
     }
     
     saveLevelsData(levelsData);
     
     return {
-        newXp: levelsData[userId].xp,
-        newLevel: levelsData[userId].level,
-        levelUp: newLevel > levelsData[userId].previousLevel || 0
+        newXp: levelsData[guildId][userId].xp,
+        newLevel: levelsData[guildId][userId].level,
+        levelUp: newLevel > levelsData[guildId][userId].level
     };
 }
 
 // Получение данных пользователя
-function getUserLevelData(userId) {
+function getUserLevelData(userId, guildId) {
     const levelsData = loadLevelsData();
-    return levelsData[userId] || {
-        xp: 0,
-        level: 1,
-        lastMessage: 0
-    };
+    if (!levelsData[guildId] || !levelsData[guildId][userId]) {
+        return {
+            xp: 0,
+            level: 1,
+            lastMessage: 0
+        };
+    }
+    return levelsData[guildId][userId];
+}
+
+// Получение топ пользователей по уровню
+function getTopLevelUsers(guildId, limit = 10) {
+    const levelsData = loadLevelsData();
+    if (!levelsData[guildId]) {
+        return [];
+    }
+    
+    // Преобразуем объект в массив и сортируем по уровню (и XP как дополнительный критерий)
+    const sortedUsers = Object.entries(levelsData[guildId])
+        .map(([userId, data]) => ({
+            userId,
+            xp: data.xp,
+            level: data.level
+        }))
+        .sort((a, b) => {
+            if (b.level !== a.level) {
+                return b.level - a.level;
+            }
+            return b.xp - a.xp;
+        })
+        .slice(0, limit);
+    
+    return sortedUsers;
 }
 
 module.exports = {
@@ -81,107 +113,147 @@ module.exports = {
         .addUserOption(option =>
             option.setName('user')
                 .setDescription('Пользователь, уровень которого хотите проверить')
-                .setRequired(false)),
+                .setRequired(false))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('leaderboard')
+                .setDescription('Показать таблицу лидеров по уровням'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('card')
+                .setDescription('Показать красивую карточку уровня пользователя')),
 
     async execute(interaction) {
-        const targetUser = interaction.options.getUser('user') || interaction.user;
-        const userData = getUserLevelData(targetUser.id);
+        const subcommand = interaction.options.getSubcommand();
         
-        // Вычисляем прогресс до следующего уровня
-        const currentLevelXp = getXpForLevel(userData.level);
-        const nextLevelXp = getXpForNextLevel(userData.level);
-        const xpNeededForNextLevel = nextLevelXp - currentLevelXp;
-        const xpEarnedInCurrentLevel = userData.xp - currentLevelXp;
-        const progressPercentage = Math.round((xpEarnedInCurrentLevel / xpNeededForNextLevel) * 100);
-        
-        // Создаем прогресс-бар
-        const progressBarLength = 15;
-        const filledBlocks = Math.floor((progressPercentage / 100) * progressBarLength);
-        const emptyBlocks = progressBarLength - filledBlocks;
-        const progressBar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
-        
-        // Создаем embed с информацией о уровне
-        const levelEmbed = new EmbedBuilder()
-            .setTitle(`📊 Уровень ${targetUser.username}`)
-            .setDescription(`<@${targetUser.id}> - Уровень **${userData.level}**`)
-            .addFields(
-                { name: 'XP', value: `${userData.xp} XP`, inline: true },
-                { name: 'Прогресс', value: `${progressBar} ${progressPercentage}%`, inline: false },
-                { name: 'До следующего уровня', value: `${xpNeededForNextLevel - xpEarnedInCurrentLevel} XP`, inline: true }
-            )
-            .setColor('#8b00ff')
-            .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
-            .setTimestamp();
-        
-        await interaction.reply({ embeds: [levelEmbed] });
+        switch (subcommand) {
+            case 'leaderboard':
+                await handleLeaderboard(interaction);
+                break;
+            case 'card':
+                await handleCard(interaction);
+                break;
+            default:
+                await handleProfile(interaction);
+                break;
+        }
     }
 };
 
-// Команда для получения таблицы лидеров по уровням
-module.exports.leaderboard = {
-    data: new SlashCommandBuilder()
-        .setName('level-leaderboard')
-        .setDescription('Показать таблицу лидеров по уровням'),
+async function handleProfile(interaction) {
+    const targetUser = interaction.options.getUser('user') || interaction.user;
+    const guildId = interaction.guild.id;
+    const userData = getUserLevelData(targetUser.id, guildId);
+    
+    // Вычисляем прогресс до следующего уровня
+    const currentLevelXp = getXpForLevel(userData.level);
+    const nextLevelXp = getXpForNextLevel(userData.level);
+    const xpNeededForNextLevel = nextLevelXp - currentLevelXp;
+    const xpEarnedInCurrentLevel = userData.xp - currentLevelXp;
+    const progressPercentage = Math.round((xpEarnedInCurrentLevel / xpNeededForNextLevel) * 100);
+    
+    // Создаем прогресс-бар
+    const progressBarLength = 20;
+    const filledBlocks = Math.floor((progressPercentage / 100) * progressBarLength);
+    const emptyBlocks = progressBarLength - filledBlocks;
+    const progressBar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
+    
+    // Создаем embed с информацией о уровне
+    const levelEmbed = new EmbedBuilder()
+        .setTitle(`📊 Уровень ${targetUser.username}`)
+        .setDescription(`<@${targetUser.id}> - Уровень **${userData.level}**`)
+        .addFields(
+            { name: 'XP', value: `${userData.xp} / ${nextLevelXp} (до следующего уровня: ${xpNeededForNextLevel - xpEarnedInCurrentLevel})`, inline: false },
+            { name: 'Прогресс', value: `${progressBar} ${progressPercentage}%`, inline: false }
+        )
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+        .setColor('#8b00ff')
+        .setTimestamp();
+    
+    await interaction.reply({ embeds: [levelEmbed] });
+}
 
-    async execute(interaction) {
-        const levelsData = loadLevelsData();
-        
-        // Преобразуем объект в массив и сортируем по уровню (и XP как дополнительный критерий)
-        const sortedUsers = Object.entries(levelsData)
-            .map(([userId, data]) => ({
-                userId,
-                level: data.level,
-                xp: data.xp
-            }))
-            .sort((a, b) => {
-                if (b.level !== a.level) {
-                    return b.level - a.level;
-                }
-                return b.xp - a.xp;
-            })
-            .slice(0, 10); // Берем топ 10
-        
-        if (sortedUsers.length === 0) {
-            const emptyEmbed = new EmbedBuilder()
-                .setTitle('📊 Таблица лидеров по уровням')
-                .setDescription('Пока никто не получил уровни.')
-                .setColor('#8b00ff')
-                .setTimestamp();
-            
-            return await interaction.reply({ embeds: [emptyEmbed] });
-        }
-        
-        // Создаем embed с таблицей лидеров
-        const leaderboardEmbed = new EmbedBuilder()
-            .setTitle('📊 Таблица лидеров по уровням')
+async function handleLeaderboard(interaction) {
+    const guildId = interaction.guild.id;
+    const topUsers = getTopLevelUsers(guildId, 10);
+    
+    if (topUsers.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+            .setTitle('🏆 Таблица лидеров по уровням')
+            .setDescription('Пока никто не получил уровни на этом сервере.')
             .setColor('#8b00ff')
             .setTimestamp();
         
-        // Добавляем информацию о каждом пользователе в топе
-        for (let i = 0; i < sortedUsers.length; i++) {
-            const user = sortedUsers[i];
-            const member = await interaction.guild.members.fetch(user.userId).catch(() => null);
-            const userName = member ? member.user.username : 'Неизвестный пользователь';
-            const position = i + 1;
-            const medal = position === 1 ? '🥇' : position === 2 ? '🥈' : position === 3 ? '🥉' : `${position}.`;
-            
-            leaderboardEmbed.addFields({
-                name: `${medal} ${userName}`,
-                value: `Уровень: ${user.level} | XP: ${user.xp}`,
-                inline: false
-            });
-        }
-        
-        await interaction.reply({ embeds: [leaderboardEmbed] });
+        return await interaction.reply({ embeds: [emptyEmbed] });
     }
-};
+    
+    // Создаем embed с таблицей лидеров
+    const leaderboardEmbed = new EmbedBuilder()
+        .setTitle('🏆 Таблица лидеров по уровням')
+        .setColor('#8b00ff')
+        .setTimestamp();
+    
+    // Добавляем информацию о каждом пользователе в топе
+    for (let i = 0; i < topUsers.length; i++) {
+        const user = topUsers[i];
+        const member = await interaction.guild.members.fetch(user.userId).catch(() => null);
+        const userName = member ? member.user.username : 'Неизвестный пользователь';
+        const position = i + 1;
+        const medal = position === 1 ? '🥇' : position === 2 ? '🥈' : position === 3 ? '🥉' : `${position}.`;
+        
+        leaderboardEmbed.addFields({
+            name: `${medal} ${userName}`,
+            value: `Уровень: ${user.level} | XP: ${user.xp}`,
+            inline: false
+        });
+    }
+    
+    await interaction.reply({ embeds: [leaderboardEmbed] });
+}
+
+async function handleCard(interaction) {
+    const targetUser = interaction.options.getUser('user') || interaction.user;
+    const guildId = interaction.guild.id;
+    const userData = getUserLevelData(targetUser.id, guildId);
+    
+    // Вычисляем прогресс до следующего уровня
+    const currentLevelXp = getXpForLevel(userData.level);
+    const nextLevelXp = getXpForNextLevel(userData.level);
+    const xpNeededForNextLevel = nextLevelXp - currentLevelXp;
+    const xpEarnedInCurrentLevel = userData.xp - currentLevelXp;
+    const progressPercentage = Math.round((xpEarnedInCurrentLevel / xpNeededForNextLevel) * 100);
+    
+    // Создаем прогресс-бар
+    const progressBarLength = 25;
+    const filledBlocks = Math.floor((progressPercentage / 100) * progressBarLength);
+    const emptyBlocks = progressBarLength - filledBlocks;
+    const progressBar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
+    
+    // Создаем embed с красивой карточкой уровня
+    const cardEmbed = new EmbedBuilder()
+        .setTitle(`🎮 Карточка уровня ${targetUser.username}`)
+        .setDescription(`**Уровень:** ${userData.level}\n**XP:** ${userData.xp} / ${nextLevelXp}\n**До следующего уровня:** ${xpNeededForNextLevel - xpEarnedInCurrentLevel} XP`)
+        .addFields(
+            { name: 'Прогресс', value: `${progressBar} ${progressPercentage}%`, inline: false }
+        )
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+        .setColor('#8b00ff')
+        .setTimestamp()
+        .setFooter({ 
+            text: `Статистика сервера ${interaction.guild.name}`, 
+            iconURL: interaction.guild.iconURL() 
+        });
+    
+    await interaction.reply({ embeds: [cardEmbed] });
+}
 
 // Функция для начисления XP за сообщение
 function awardXPForMessage(message) {
     // Проверяем, является ли пользователь ботом
     if (message.author.bot) return;
     
-    const userData = getUserLevelData(message.author.id);
+    const guildId = message.guild.id;
+    const userData = getUserLevelData(message.author.id, guildId);
     const now = Date.now();
     
     // Ограничение на частоту получения XP (например, раз в 60 секунд)
@@ -195,7 +267,7 @@ function awardXPForMessage(message) {
     // Начисляем XP за сообщение (например, от 5 до 15 XP)
     const xpToAdd = Math.floor(Math.random() * 11) + 5; // От 5 до 15 XP
     
-    const result = addXP(message.author.id, xpToAdd);
+    const result = addXP(message.author.id, xpToAdd, guildId);
     
     // Если пользователь достиг нового уровня, отправляем уведомление
     if (result.levelUp) {
@@ -216,7 +288,7 @@ function awardXPForMessage(message) {
     
     // Обновляем прогресс квестов на получение опыта
     try {
-        require('../System/userProfiles').updateQuestProgressByType(message.author.id, 'xp', xpToAdd);
+        require('./System/userProfiles').updateQuestProgressByType(message.author.id, 'xp', xpToAdd);
     } catch (error) {
         console.error('Ошибка при обновлении прогресса квеста на XP:', error);
     }

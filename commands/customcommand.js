@@ -260,7 +260,7 @@ async function handleListCommands(interaction, commands, guildId) {
         const creator = await interaction.guild.members.fetch(cmd.createdBy).catch(() => null);
         listEmbed.addFields({
             name: `/${name}`,
-            value: `${cmd.description}\nСоздал: ${creator ? `<@${cmd.createdBy}>` : 'Неизвестно'}\nИспользований: ${cmd.uses}`,
+            value: `${cmd.description}\nСоздал: ${creator ? `<@${cmd.createdBy}>` : 'Неизвестно'}\nИспользований: ${cmd.uses || 0}`,
             inline: true
         });
     }

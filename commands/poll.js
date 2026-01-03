@@ -1,4 +1,23 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+
+// Путь к файлу с голосованиями
+const pollsPath = path.join(__dirname, '../System/polls.json');
+
+// Загрузка голосований
+function loadPolls() {
+    if (fs.existsSync(pollsPath)) {
+        const data = fs.readFileSync(pollsPath, 'utf8');
+        return JSON.parse(data);
+    }
+    return {};
+}
+
+// Сохранение голосований
+function savePolls(data) {
+    fs.writeFileSync(pollsPath, JSON.stringify(data, null, 2));
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -106,32 +125,35 @@ module.exports = {
             fetchReply: true
         });
         
-        // Сохраняем данные голосования (в реальной системе это должно быть в базе данных)
-        const pollData = {
+        // Сохраняем данные голосования
+        const polls = loadPolls();
+        const pollId = `poll_${Date.now()}_${interaction.user.id}`;
+        
+        const newPoll = {
+            id: pollId,
             messageId: pollMessage.id,
-            channelId: pollMessage.channel.id,
+            channelId: interaction.channel.id,
             question: question,
             options: options.map((opt, idx) => ({
                 id: idx,
                 text: opt,
                 votes: [],
-                emoji: reactions[idx]
+                emoji: reactions[idx],
+                letter: String.fromCharCode(65 + idx)
             })),
             creatorId: interaction.user.id,
-            endTime: new Date(Date.now() + duration * 60 * 1000), // Конвертируем минуты в миллисекунды
+            endTime: new Date(Date.now() + duration * 60 * 100).toISOString(), // Конвертируем минуты в миллисекунды
             results: null
         };
         
-        // Здесь должна быть логика сохранения данных голосования
-        // В реальной системе это будет в базе данных
-        global.polls = global.polls || {};
-        global.polls[pollMessage.id] = pollData;
+        polls[pollId] = newPoll;
+        savePolls(polls);
         
         // Создаем таймер для завершения голосования
         setTimeout(async () => {
             try {
                 // Получаем актуальные данные голосования
-                const finalPollData = global.polls[pollMessage.id];
+                const finalPollData = polls[pollId];
                 if (!finalPollData) return;
                 
                 // Подсчитываем результаты
@@ -139,7 +161,8 @@ module.exports = {
                     id: opt.id,
                     text: opt.text,
                     votes: opt.votes.length,
-                    percentage: finalPollData.totalVotes > 0 ? Math.round((opt.votes.length / finalPollData.totalVotes) * 100) : 0
+                    percentage: finalPollData.options.reduce((sum, o) => sum + o.votes.length, 0) > 0 ? 
+                        Math.round((opt.votes.length / finalPollData.options.reduce((sum, o) => sum + o.votes.length, 0)) * 100) : 0
                 }));
                 
                 // Сортируем по количеству голосов
@@ -167,11 +190,21 @@ module.exports = {
                     inline: false
                 });
                 
-                // Убираем кнопки и обновляем сообщение
-                await pollMessage.edit({ embeds: [resultsEmbed], components: [] });
+                // Получаем канал и сообщение для обновления
+                const channel = interaction.guild.channels.cache.get(finalPollData.channelId);
+                if (channel) {
+                    const message = await channel.messages.fetch(finalPollData.messageId).catch(() => null);
+                    if (message) {
+                        // Убираем кнопки и обновляем сообщение
+                        await message.edit({ embeds: [resultsEmbed], components: [] });
+                    }
+                }
                 
-                // Удаляем данные голосования
-                delete global.polls[pollMessage.id];
+                // Обновляем данные голосования
+                finalPollData.results = results;
+                finalPollData.status = 'completed';
+                savePolls(polls);
+                
             } catch (error) {
                 console.error('Ошибка при завершении голосования:', error);
             }
@@ -179,87 +212,94 @@ module.exports = {
     }
 };
 
-// Обработка нажатий на кнопки голосования
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isButton()) return;
+// Обработка нажатий на кнопки голосования должна быть в основном файле index.js
+
+// Функция для обработки голосования, которая будет вызываться из index.js
+function handlePollVote(interaction) {
+    const polls = loadPolls();
+    const pollId = Object.keys(polls).find(id => polls[id].messageId === interaction.message.id);
     
-    // Проверяем, является ли кнопка голосованием
-    if (interaction.customId.startsWith('poll_vote_')) {
-        const pollId = interaction.message.id;
-        const pollData = global.polls ? global.polls[pollId] : null;
-        
-        if (!pollData) {
-            await interaction.reply({ 
-                content: '❌ Это голосование уже завершено!', 
-                ephemeral: true 
-            });
-            return;
-        }
-        
-        // Проверяем, не голосовал ли уже пользователь
-        const optionIndex = parseInt(interaction.customId.split('_')[2]);
-        const userVote = pollData.options[optionIndex];
-        
-        // Проверяем, не голосовал ли пользователь за этот вариант
-        if (userVote.votes.includes(interaction.user.id)) {
-            // Убираем голос
-            userVote.votes = userVote.votes.filter(id => id !== interaction.user.id);
-            
-            await interaction.reply({ 
-                content: `✅ Вы убрали свой голос за **${userVote.text}**`, 
-                ephemeral: true 
-            });
-        } else {
-            // Проверяем, голосовал ли пользователь за другие варианты
-            for (const option of pollData.options) {
-                if (option.votes.includes(interaction.user.id)) {
-                    // Убираем предыдущий голос
-                    option.votes = option.votes.filter(id => id !== interaction.user.id);
-                }
-            }
-            
-            // Добавляем голос за выбранный вариант
-            userVote.votes.push(interaction.user.id);
-            
-            await interaction.reply({ 
-                content: `✅ Вы проголосовали за **${userVote.text}**`, 
-                ephemeral: true 
-            });
-        }
-        
-        // Обновляем embed с актуальными результатами
-        try {
-            const updatedEmbed = new EmbedBuilder()
-                .setTitle('📊 Голосование')
-                .setDescription(pollData.question)
-                .setColor('#8b00ff')
-                .setTimestamp()
-                .setFooter({ 
-                    text: `Голосование от ${interaction.user.username}`, 
-                    iconURL: interaction.user.displayAvatarURL() 
-                });
-            
-            // Добавляем поля с обновленными голосами
-            for (const option of pollData.options) {
-                const voteCount = option.votes.length;
-                updatedEmbed.addFields({
-                    name: `${String.fromCharCode(65 + option.id)}. ${option.text}`,
-                    value: `Голосов: ${voteCount}`,
-                    inline: false
-                });
-            }
-            
-            // Обновляем длительность
-            const timeLeft = Math.ceil((new Date(pollData.endTime) - new Date()) / (1000 * 60));
-            updatedEmbed.addFields({ 
-                name: '⏱️ Осталось времени', 
-                value: timeLeft > 0 ? `${timeLeft} минут${timeLeft === 1 ? '' : 'ы'}` : 'Завершено', 
-                inline: false 
-            });
-            
-            await interaction.message.edit({ embeds: [updatedEmbed] });
-        } catch (error) {
-            console.error('Ошибка при обновлении голосования:', error);
-        }
+    if (!pollId || polls[pollId].status === 'completed') {
+        interaction.reply({ 
+            content: '❌ Это голосование уже завершено!', 
+            ephemeral: true 
+        }).catch(console.error);
+        return;
     }
-});
+    
+    const poll = polls[pollId];
+    const optionIndex = parseInt(interaction.customId.split('_')[2]);
+    const userVote = poll.options[optionIndex];
+    
+    // Проверяем, голосовал ли пользователь уже за этот вариант
+    if (userVote.votes.includes(interaction.user.id)) {
+        // Убираем голос
+        userVote.votes = userVote.votes.filter(id => id !== interaction.user.id);
+        
+        interaction.reply({ 
+            content: `✅ Вы убрали свой голос за **${userVote.text}**`, 
+            ephemeral: true 
+        }).catch(console.error);
+    } else {
+        // Проверяем, голосовал ли пользователь за другие варианты
+        for (const option of poll.options) {
+            if (option.votes.includes(interaction.user.id)) {
+                // Убираем предыдущий голос
+                option.votes = option.votes.filter(id => id !== interaction.user.id);
+            }
+        }
+        
+        // Добавляем голос за выбранный вариант
+        userVote.votes.push(interaction.user.id);
+        
+        interaction.reply({ 
+            content: `✅ Вы проголосовали за **${userVote.text}**`, 
+            ephemeral: true 
+        }).catch(console.error);
+    }
+    
+    // Обновляем embed с актуальными результатами
+    try {
+        const updatedEmbed = new EmbedBuilder()
+            .setTitle('📊 Голосование')
+            .setDescription(poll.question)
+            .setColor('#8b00ff')
+            .setTimestamp()
+            .setFooter({ 
+                text: `Голосование от ${interaction.user.username}`, 
+                iconURL: interaction.user.displayAvatarURL() 
+            });
+        
+        // Добавляем поля с обновленными голосами
+        for (const option of poll.options) {
+            const totalVotes = poll.options.reduce((sum, o) => sum + o.votes.length, 0);
+            const voteCount = option.votes.length;
+            const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+            
+            updatedEmbed.addFields({
+                name: `${option.letter}. ${option.text}`,
+                value: `Голосов: ${voteCount} (${percentage}%)`,
+                inline: false
+            });
+        }
+        
+        // Обновляем длительность
+        const timeLeft = Math.ceil((new Date(poll.endTime) - new Date()) / (1000 * 60));
+        updatedEmbed.addFields({ 
+            name: '⏱️ Осталось времени', 
+            value: timeLeft > 0 ? `${timeLeft} минут${timeLeft === 1 ? '' : 'ы'}` : 'Завершено', 
+            inline: false 
+        });
+        
+        // Обновляем сообщение
+        interaction.message.edit({ embeds: [updatedEmbed] }).catch(console.error);
+        
+        // Сохраняем обновленные данные голосования
+        savePolls(polls);
+    } catch (error) {
+        console.error('Ошибка при обновлении голосования:', error);
+    }
+}
+
+// Экспортируем функцию для использования в основном файле
+module.exports.handlePollVote = handlePollVote;

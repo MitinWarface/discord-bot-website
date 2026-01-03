@@ -11,7 +11,7 @@ const NotificationSystem = require('./System/notificationSystem');
 const { getUpcomingEvents, cleanupPastEvents } = require('./System/eventSystem');
 
 // Инициализация Lavalink
-const { initializeLavalink, lavalinkClient } = require('./System/Audio/lavalinkSystem');
+const { initializeLavalink } = require('./System/Audio/lavalinkSystem');
 const lavalinkConfig = require('./Config/lavalink-config');
 
 // Создание клиента Discord
@@ -51,14 +51,30 @@ const commands = [];
 
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
+    const commandModule = require(filePath);
     
-    // Установка команды в коллекцию
-    client.commands.set(command.name || command.data.name, command);
-    commands.push(command.data ? command.data.toJSON() : {
-        name: command.name,
-        description: command.description
-    });
+    // Проверяем, является ли экспорт действительной командой
+    if (commandModule && typeof commandModule === 'object' && commandModule.data && commandModule.execute) {
+        // Это обычная команда
+        client.commands.set(commandModule.data.name, commandModule);
+        commands.push(commandModule.data.toJSON());
+    } else if (commandModule && typeof commandModule === 'object') {
+        // Это модуль с несколькими командами (например, с вложенными экспортами)
+        // Проверяем каждое свойство объекта
+        for (const [key, value] of Object.entries(commandModule)) {
+            // Пропускаем служебные свойства
+            if (key === 'default' || key === '__esModule') continue;
+            
+            if (value && typeof value === 'object' && value.data && value.execute) {
+                // Это вложенная команда
+                client.commands.set(value.data.name, value);
+                commands.push(value.data.toJSON());
+            }
+        }
+    } else {
+        // Ни одна из команд не найдена
+        console.log(`Предупреждение: Файл команды ${file} не экспортирует действительную команду, пропускаем...`);
+    }
 }
 
 // Обработка события готовности бота
@@ -306,7 +322,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         )
                         .setTimestamp()
                         .setFooter({ text: `Настройки`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     // Создаем кнопки для управления настройками
                     const settingsButtonsRow = new ActionRowBuilder()
                         .addComponents(
@@ -326,7 +342,7 @@ client.on(Events.InteractionCreate, async interaction => {
                                 .setStyle(ButtonStyle.Primary)
                                 .setEmoji('🔒')
                         );
-
+ 
                     await interaction.reply({
                         embeds: [settingsEmbed],
                         components: [settingsButtonsRow],
@@ -350,13 +366,13 @@ client.on(Events.InteractionCreate, async interaction => {
                             { name: '`/guild`', value: 'Система гильдий', inline: false },
                             { name: '`/rep`', value: 'Выдать репутацию пользователю', inline: false },
                             { name: '`/warn`', value: 'Выдать предупреждение пользователю (<@&1399365865908211814>, <@&1399359075657056428>)', inline: false },
-                            { name: '`/kick`', value: 'Выгнать пользователя с сервера (<@&1399365865908211814>, <@&1399359075657056428>)', inline: false },
+                            { name: '`/kick`', value: 'Выгнать пользователя с сервера (<@&139936586590821814>, <@&1399359075657056428>)', inline: false },
                             { name: '`/ban`', value: 'Заблокировать пользователя на сервере (<@&1399365865908211814>, <@&1399359075657056428>)', inline: false },
                             { name: '**💡 Дополнительно**', value: 'Вы также можете использовать префикс `*aurora` вместо `/aurora`', inline: false }
                         )
                         .setTimestamp()
                         .setFooter({ text: `Помощь`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     await interaction.reply({
                         embeds: [helpEmbed],
                         ephemeral: false
@@ -386,7 +402,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         )
                         .setTimestamp()
                         .setFooter({ text: `ID: ${interaction.user.id}`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     await interaction.reply({
                         embeds: [profileEmbed],
                         ephemeral: true
@@ -410,7 +426,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         .setColor('#8b00ff')
                         .setTimestamp()
                         .setFooter({ text: `Запрос от ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     // Добавляем поля для каждого пользователя в топе
                     for (let i = 0; i < topUsers.length; i++) {
                         const user = topUsers[i];
@@ -513,7 +529,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         
                         const timeUntilNext = nextDaily - Date.now();
                         const hours = Math.floor(timeUntilNext / (1000 * 60 * 60));
-                        const minutes = Math.floor((timeUntilNext % (100 * 60 * 60)) / (1000 * 60));
+                        const minutes = Math.floor((timeUntilNext % (1000 * 60 * 60)) / (1000 * 60));
                         
                         const dailyEmbed = new EmbedBuilder()
                             .setTitle('⏳ Ежедневная награда')
@@ -521,7 +537,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             .setDescription(`Вы уже получили ежедневную награду!\nСледующая награда будет доступна через ${hours}ч ${minutes}м`)
                             .setTimestamp()
                             .setFooter({ text: `Попробуйте позже`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                         await interaction.reply({ embeds: [dailyEmbed], ephemeral: true });
                     }
                     break;
@@ -538,7 +554,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         .setDescription(`Ваши очки: **${userPoints}**\n\nВыберите товар для покупки:`)
                         .setTimestamp()
                         .setFooter({ text: `Aurora Shop`, iconURL: interaction.client.user.displayAvatarURL() });
-
+ 
                     // Добавляем информацию о товарах
                     for (const item of shopItems) {
                         const affordable = userPoints >= item.price ? '✅' : '❌';
@@ -548,33 +564,33 @@ client.on(Events.InteractionCreate, async interaction => {
                             inline: false
                         });
                     }
-
+ 
                     // Создаем кнопки для покупки товаров
                     const rows = [];
                     let currentRow = new ActionRowBuilder();
                     let buttonCount = 0;
-
+ 
                     for (const item of shopItems) {
                         if (buttonCount >= 5) { // Максимум 5 кнопок в строке
                             rows.push(currentRow);
                             currentRow = new ActionRowBuilder();
                             buttonCount = 0;
                         }
-
+ 
                         const button = new ButtonBuilder()
                             .setCustomId(`buy_${item.id}`)
                             .setLabel(item.name)
                             .setStyle(userPoints >= item.price ? ButtonStyle.Success : ButtonStyle.Secondary)
                             .setDisabled(userPoints < item.price);
-
+ 
                         currentRow.addComponents(button);
                         buttonCount++;
                     }
-
+ 
                     if (buttonCount > 0) {
                         rows.push(currentRow);
                     }
-
+ 
                     await interaction.reply({
                         embeds: [shopEmbed],
                         components: rows,
@@ -594,7 +610,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             .setDescription('Ваш инвентарь пуст. Посетите магазин, чтобы купить что-нибудь!')
                             .setTimestamp()
                             .setFooter({ text: `Инвентарь`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                         await interaction.reply({ embeds: [invEmbed], ephemeral: true });
                         return;
                     }
@@ -618,7 +634,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         .setDescription(`У вас в инвентаре **${inventory.length}** предметов`)
                         .setTimestamp()
                         .setFooter({ text: `Инвентарь`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     // Добавляем информацию о каждом уникальном предмете
                     for (const itemId in itemsCount) {
                         const item = itemsCount[itemId];
@@ -628,7 +644,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             inline: false
                         });
                     }
-
+ 
                     await interaction.reply({ embeds: [invEmbed], ephemeral: false });
                     break;
                     
@@ -648,7 +664,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         .setDescription(`Ваши очки: **${questUserProfile.points}**\n\nВаши активные квесты:`)
                         .setTimestamp()
                         .setFooter({ text: `Квесты`, iconURL: interaction.client.user.displayAvatarURL() });
-
+ 
                     // Если у пользователя нет активных квестов, предлагаем взять новый
                     if (userQuests.length === 0) {
                         embed.addFields({
@@ -669,7 +685,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             });
                         }
                     }
-
+ 
                     // Отображаем недавно завершенные квесты (последние 3)
                     if (completedQuests.length > 0) {
                         const recentCompleted = completedQuests.slice(-3); // последние 3 квеста
@@ -686,7 +702,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             });
                         }
                     }
-
+ 
                     // Создаем кнопки
                     const row = new ActionRowBuilder();
                     
@@ -712,7 +728,7 @@ client.on(Events.InteractionCreate, async interaction => {
                                 .setDisabled(true)
                         );
                     }
-
+ 
                     await interaction.reply({
                         embeds: [embed],
                         components: [row],
@@ -735,7 +751,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             )
                             .setTimestamp()
                             .setFooter({ text: `Квест начат`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                         await interaction.reply({ embeds: [questEmbed], ephemeral: false });
                     } else {
                         const noQuestsEmbed = new EmbedBuilder()
@@ -744,7 +760,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             .setDescription('К сожалению, в данный момент нет доступных квестов для вас.')
                             .setTimestamp()
                             .setFooter({ text: `Попробуйте позже`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                         await interaction.reply({ embeds: [noQuestsEmbed], ephemeral: true });
                     }
                     break;
@@ -781,7 +797,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             )
                             .setTimestamp()
                             .setFooter({ text: `Информация о гильдии`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                         // Создаем кнопки для действий с гильдией
                         const guildRow = new ActionRowBuilder();
                         guildRow.addComponents(
@@ -790,7 +806,7 @@ client.on(Events.InteractionCreate, async interaction => {
                                 .setLabel('Покинуть гильдию')
                                 .setStyle(ButtonStyle.Danger)
                         );
-
+ 
                         if (userGuild.leader === interaction.user.id) {
                             // Если пользователь лидер гильдии, добавляем дополнительные кнопки
                             const guildManagementRow = new ActionRowBuilder()
@@ -836,7 +852,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             )
                             .setTimestamp()
                             .setFooter({ text: `Гильдия`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                         // Создаем кнопки для действий
                         const guildButtonsRow = new ActionRowBuilder()
                             .addComponents(
@@ -849,7 +865,7 @@ client.on(Events.InteractionCreate, async interaction => {
                                     .setLabel('Присоединиться')
                                     .setStyle(ButtonStyle.Primary)
                             );
-
+ 
                         await interaction.reply({
                             embeds: [guildEmbed],
                             components: [guildButtonsRow],
@@ -874,7 +890,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         
                         const timeUntilNext = nextRep - Date.now();
                         const hours = Math.floor(timeUntilNext / (1000 * 60 * 60));
-                        const minutes = Math.floor((timeUntilNext % (100 * 60 * 60)) / (1000 * 60));
+                        const minutes = Math.floor((timeUntilNext % (1000 * 60 * 60)) / (1000 * 60));
                         
                         const repEmbed = new EmbedBuilder()
                             .setTitle('⏰ Репутация')
@@ -882,7 +898,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             .setDescription(`Вы уже выдавали репутацию за последние 24 часа!\nСледующая возможность через ${hours}ч ${minutes}м`)
                             .setTimestamp()
                             .setFooter({ text: `Попробуйте позже`, iconURL: interaction.user.displayAvatarURL() });
-     
+      
                         await interaction.reply({
                             embeds: [repEmbed],
                             ephemeral: true
@@ -905,14 +921,14 @@ client.on(Events.InteractionCreate, async interaction => {
                             )
                             .setTimestamp()
                             .setFooter({ text: `Репутация`, iconURL: interaction.user.displayAvatarURL() });
-     
+      
                         await interaction.reply({
                             embeds: [repEmbed],
                             ephemeral: true
                         });
                     }
                     break;
-                 
+                  
                 case 'aurora_events':
                     // Открываем меню событий
                     const { getActiveEvents, getUserEvents } = require('./System/eventSystem');
@@ -983,7 +999,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         ephemeral: false
                     });
                     break;
-                 
+                  
                 case 'events_list':
                     // Показываем список всех событий
                     const { getActiveEvents: getAllActiveEvents } = require('./System/eventSystem');
@@ -1038,7 +1054,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     
                     await interaction.update({ embeds: [eventsListEmbed], components: [] });
                     break;
-                 
+                  
                 case 'events_register':
                     // Открываем меню регистрации на событие
                     const registerEmbed = new EmbedBuilder()
@@ -1053,7 +1069,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     
                     await interaction.update({ embeds: [registerEmbed], components: [] });
                     break;
-                 
+                  
                 case 'events_unregister':
                     // Открываем меню отмены регистрации на событие
                     const unregisterEmbed = new EmbedBuilder()
@@ -1068,7 +1084,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     
                     await interaction.update({ embeds: [unregisterEmbed], components: [] });
                     break;
-                 
+                  
                 case 'settings_language':
                     // Обработка настройки языка
                     const langUserProfile = getUserProfile(interaction.user.id);
@@ -1076,7 +1092,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     const userLanguageSettings = userSettings.language || 'ru'; // По умолчанию русский
                     const langEmbed = new EmbedBuilder()
                         .setTitle('🌐 Настройка языка')
-                        .setColor('#8b00ff')
+                        .setColor('#8b0ff')
                         .setDescription('Выберите язык для бота:')
                         .addFields(
                             { name: '🇷🇺 Русский', value: userLanguageSettings === 'ru' ? '✅ Текущий язык' : 'Выбрать', inline: true },
@@ -1084,7 +1100,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         )
                         .setTimestamp()
                         .setFooter({ text: `Язык`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     // Создаем кнопки для выбора языка
                     const langRow = new ActionRowBuilder()
                         .addComponents(
@@ -1099,7 +1115,7 @@ client.on(Events.InteractionCreate, async interaction => {
                                 .setStyle(ButtonStyle.Primary)
                                 .setEmoji('🇺🇸')
                         );
-
+ 
                     await interaction.reply({
                         embeds: [langEmbed],
                         components: [langRow],
@@ -1122,7 +1138,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         )
                         .setTimestamp()
                         .setFooter({ text: `Уведомления`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     // Создаем кнопки для включения/выключения уведомлений
                     const notifyRow = new ActionRowBuilder()
                         .addComponents(
@@ -1147,7 +1163,7 @@ client.on(Events.InteractionCreate, async interaction => {
                                 .setStyle(notifyUserProfile.settings?.notifications?.events ? ButtonStyle.Danger : ButtonStyle.Success)
                                 .setEmoji('🎊')
                         );
-
+ 
                     await interaction.update({
                         embeds: [notifyEmbed],
                         components: [notifyRow]
@@ -1167,7 +1183,7 @@ client.on(Events.InteractionCreate, async interaction => {
                         )
                         .setTimestamp()
                         .setFooter({ text: `Приватность`, iconURL: interaction.user.displayAvatarURL() });
-
+ 
                     // Создаем кнопки для настройки приватности
                     const privacyButtonsRow = new ActionRowBuilder()
                         .addComponents(
@@ -1182,7 +1198,7 @@ client.on(Events.InteractionCreate, async interaction => {
                                 .setStyle(privacyUserProfile.settings?.privacy?.statsVisible ? ButtonStyle.Danger : ButtonStyle.Success)
                                 .setEmoji('📊')
                         );
-
+ 
                     await interaction.update({
                         embeds: [privacyEmbed],
                         components: [privacyButtonsRow]
@@ -1541,7 +1557,8 @@ async function handleShopPurchase(interaction) {
                 } catch (error) {
                     console.error('Ошибка при отправке уведомления о квесте:', error);
                 }
-            }
+            
+        }
         
         // Если пользователь состоит в гильдии, добавляем опыт гильдии
         const userGuild = require('./System/guildSystem').getUserGuild(interaction.user.id);
@@ -1752,7 +1769,7 @@ client.on(Events.MessageCreate, async message => {
                                     checkResult.caps ? 'Капс' :
                                     checkResult.invites ? 'Приглашение на другой сервер' : 'Нарушение правил', inline: true }
                             )
-                            .setColor('#FFA500')
+                            .setColor('#FFA50')
                             .setTimestamp();
                         
                         await message.author.send({ embeds: [warningEmbed] });
@@ -1847,4 +1864,4 @@ setInterval(async () => {
     } catch (error) {
         console.error('Ошибка при проверке предстоящих событий:', error);
     }
-}, 15 * 60 * 1000); // 15 минут в миллисекундах
+}, 15 * 60 * 10); // 15 минут в миллисекундах

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -29,7 +29,8 @@ function getUserProfile(userId) {
             lastDaily: null,
             lastWork: null,
             inventory: [],
-            transactions: []
+            transactions: [],
+            dailyStreak: 0
         };
         saveEconomyData(economyData);
     }
@@ -46,7 +47,8 @@ function updateUserProfile(userId, updates) {
             lastDaily: null,
             lastWork: null,
             inventory: [],
-            transactions: []
+            transactions: [],
+            dailyStreak: 0
         };
     }
     
@@ -77,21 +79,28 @@ function canClaimDaily(userId) {
 function claimDaily(userId) {
     const user = getUserProfile(userId);
     if (!canClaimDaily(userId)) {
-        return { success: false, message: 'Вы уже получили ежедневную награду!' };
+        return { success: false, message: 'Вы уже получили ежедневную награду сегодня!' };
     }
     
-    const dailyAmount = Math.floor(Math.random() * 201) + 100; // От 100 до 300 монет
+    // Определяем базовую награду
+    const baseReward = 100;
+    // Добавляем бонус за ежедневную серию
+    const streakBonus = user.dailyStreak * 10; // 10 бонусных монет за каждый день подряд
+    const totalReward = baseReward + streakBonus;
+    
     const newUser = updateUserProfile(userId, {
-        coins: user.coins + dailyAmount,
-        lastDaily: new Date().toISOString()
+        coins: user.coins + totalReward,
+        lastDaily: new Date().toISOString(),
+        dailyStreak: user.dailyStreak + 1
     });
     
     // Добавляем транзакцию
-    addTransaction(userId, 'daily', dailyAmount, 'Ежедневная награда');
+    addTransaction(userId, 'daily', totalReward, `Ежедневная награда (серия: ${newUser.dailyStreak} дней)`);
     
     return {
         success: true,
-        amount: dailyAmount,
+        reward: totalReward,
+        streak: newUser.dailyStreak,
         newBalance: newUser.coins
     };
 }
@@ -106,7 +115,7 @@ function canWork(userId) {
     const lastWork = new Date(user.lastWork);
     const now = new Date();
     const timeDiff = now - lastWork;
-    const hoursDiff = timeDiff / (1000 * 60);
+    const hoursDiff = timeDiff / (1000 * 60 * 60);
     
     return hoursDiff >= 12; // Работа раз в 12 часов
 }
@@ -132,7 +141,11 @@ function doWork(userId) {
         { name: 'Модератор', min: 30, max: 100 },
         { name: 'Писатель', min: 25, max: 90 },
         { name: 'Музыкант', min: 35, max: 110 },
-        { name: 'Художник', min: 30, max: 100 }
+        { name: 'Художник', min: 30, max: 100 },
+        { name: 'Строитель', min: 45, max: 130 },
+        { name: 'Ученый', min: 60, max: 180 },
+        { name: 'Кулинар', min: 20, max: 80 },
+        { name: 'Фермер', min: 35, max: 95 }
     ];
     
     const randomJob = jobs[Math.floor(Math.random() * jobs.length)];
@@ -215,9 +228,10 @@ function getTopUsers(limit = 10) {
         .map(([userId, data]) => ({
             userId: userId,
             coins: data.coins,
-            bank: data.bank
+            bank: data.bank,
+            total: data.coins + data.bank
         }))
-        .sort((a, b) => (b.coins + b.bank) - (a.coins + a.bank))
+        .sort((a, b) => b.total - a.total)
         .slice(0, limit);
     
     return users;
@@ -262,8 +276,12 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('shop')
-                .setDescription('Открыть магазин')),
-    
+                .setDescription('Открыть магазин'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('inventory')
+                .setDescription('Показать ваш инвентарь')),
+
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         
@@ -286,6 +304,9 @@ module.exports = {
             case 'shop':
                 await handleShop(interaction);
                 break;
+            case 'inventory':
+                await handleInventory(interaction);
+                break;
         }
     }
 };
@@ -298,9 +319,10 @@ async function handleBalance(interaction) {
         .setTitle(`💰 Баланс ${targetUser.username}`)
         .setDescription(`<@${targetUser.id}>`)
         .addFields(
-            { name: 'Монеты', value: `${user.coins}`, inline: true },
-            { name: 'В банке', value: `${user.bank}`, inline: true },
-            { name: 'Всего', value: `${user.coins + user.bank}`, inline: true }
+            { name: 'Монеты', value: `${user.coins.toLocaleString()}`, inline: true },
+            { name: 'В банке', value: `${user.bank.toLocaleString()}`, inline: true },
+            { name: 'Всего', value: `${(user.coins + user.bank).toLocaleString()}`, inline: true },
+            { name: 'Ежедневная серия', value: `${user.dailyStreak} дней`, inline: true }
         )
         .setColor('#8b00ff')
         .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
@@ -315,9 +337,10 @@ async function handleDaily(interaction) {
     if (result.success) {
         const dailyEmbed = new EmbedBuilder()
             .setTitle('🎁 Ежедневная награда')
-            .setDescription(`Вы получили **${result.amount}** монет!`)
+            .setDescription(`Вы получили **${result.reward}** монет!`)
             .addFields(
-                { name: 'Новый баланс', value: `${result.newBalance} монет`, inline: true }
+                { name: 'Новый баланс', value: `${result.newBalance.toLocaleString()} монет`, inline: true },
+                { name: 'Ежедневная серия', value: `${result.streak} дней подряд`, inline: true }
             )
             .setColor('#57f287')
             .setTimestamp();
@@ -342,7 +365,7 @@ async function handleWork(interaction) {
             .setTitle('💼 Работа выполнена')
             .setDescription(`Вы поработали как **${result.job}** и заработали **${result.earnings}** монет!`)
             .addFields(
-                { name: 'Новый баланс', value: `${result.newBalance} монет`, inline: true }
+                { name: 'Новый баланс', value: `${result.newBalance.toLocaleString()} монет`, inline: true }
             )
             .setColor('#57f287')
             .setTimestamp();
@@ -379,10 +402,10 @@ async function handleTransfer(interaction) {
     if (result.success) {
         const transferEmbed = new EmbedBuilder()
             .setTitle('💸 Перевод совершен')
-            .setDescription(`Вы перевели **${amount}** монет пользователю <@${targetUser.id}>`)
+            .setDescription(`Вы перевели **${amount.toLocaleString()}** монет пользователю <@${targetUser.id}>`)
             .addFields(
-                { name: 'Ваш баланс', value: `${result.fromNewBalance} монет`, inline: true },
-                { name: 'Баланс получателя', value: `${result.toNewBalance} монет`, inline: true }
+                { name: 'Ваш баланс', value: `${result.fromNewBalance.toLocaleString()} монет`, inline: true },
+                { name: 'Баланс получателя', value: `${result.toNewBalance.toLocaleString()} монет`, inline: true }
             )
             .setColor('#57f287')
             .setTimestamp();
@@ -420,7 +443,7 @@ async function handleLeaderboard(interaction) {
         const position = i + 1;
         const medal = position === 1 ? '🥇' : position === 2 ? '🥈' : position === 3 ? '🥉' : `${position}.`;
         
-        leaderboardText += `${medal} **${userName}** - ${(user.coins + user.bank).toLocaleString()} монет\n`;
+        leaderboardText += `${medal} **${userName}** - ${(user.total).toLocaleString()} монет\n`;
     }
     
     const leaderboardEmbed = new EmbedBuilder()
@@ -433,7 +456,7 @@ async function handleLeaderboard(interaction) {
 }
 
 async function handleShop(interaction) {
-    // Здесь будет реализация магазина
+    // Заглушка для магазина
     const shopEmbed = new EmbedBuilder()
         .setTitle('🏪 Магазин')
         .setDescription('Добро пожаловать в магазин! Здесь вы можете приобрести различные предметы за монеты.\n\nНастройка магазина в процессе...')
@@ -441,4 +464,46 @@ async function handleShop(interaction) {
         .setTimestamp();
     
     await interaction.reply({ embeds: [shopEmbed] });
+}
+
+async function handleInventory(interaction) {
+    const user = getUserProfile(interaction.user.id);
+    const inventory = user.inventory || [];
+    
+    if (inventory.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+            .setTitle('🎒 Ваш инвентарь')
+            .setDescription('Ваш инвентарь пуст. Посетите магазин, чтобы купить что-нибудь!')
+            .setColor('#95a5a6')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [emptyEmbed] });
+    }
+    
+    // Группируем предметы по типам и считаем количество
+    const itemsCount = {};
+    inventory.forEach(item => {
+        if (itemsCount[item.id]) {
+            itemsCount[item.id].count++;
+        } else {
+            itemsCount[item.id] = {
+                ...item,
+                count: 1
+            };
+        }
+    });
+    
+    let inventoryText = '';
+    for (const itemId in itemsCount) {
+        const item = itemsCount[itemId];
+        inventoryText += `**${item.name}** ×${item.count}\n${item.description}\n\n`;
+    }
+    
+    const invEmbed = new EmbedBuilder()
+        .setTitle('🎒 Ваш инвентарь')
+        .setDescription(`У вас в инвентаре **${inventory.length}** предметов:\n\n${inventoryText}`)
+        .setColor('#8b00ff')
+        .setTimestamp();
+    
+    await interaction.reply({ embeds: [invEmbed] });
 }
