@@ -1,13 +1,16 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
 } = require('discord.js');
 const { getUserProfile } = require('../System/userProfiles');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('aurora')
-        .setDescription('Показывает информацию о боте Aurora'),
+        .setDescription('Показывает интерактивное меню бота Aurora'),
         
     async execute(interaction) {
         // Получаем профиль пользователя
@@ -35,9 +38,41 @@ module.exports = {
             .setTimestamp()
             .setFooter({ text: `Aurora Bot | ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
 
-        // Отправляем сообщение с информацией
+        // Создаем кнопки для главного меню
+        const buttonsRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('aurora_profile')
+                    .setLabel('Профиль')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('👤'),
+                new ButtonBuilder()
+                    .setCustomId('aurora_leaderboard')
+                    .setLabel('Лидеры')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('🏆'),
+                new ButtonBuilder()
+                    .setCustomId('aurora_daily')
+                    .setLabel('Ежедневно')
+                    .setStyle(ButtonStyle.Success)
+                    .setEmoji('🎁'),
+                new ButtonBuilder()
+                    .setCustomId('aurora_events')
+                    .setLabel('События')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('🎊'),
+                new ButtonBuilder()
+                    .setCustomId('aurora_close')
+                    .setLabel('Закрыть')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('❌')
+            );
+
+        // Отправляем сообщение с информацией и кнопками
         await interaction.reply({
-            embeds: [embed]
+            embeds: [embed],
+            components: [buttonsRow],
+            ephemeral: false
         });
     },
 };

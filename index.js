@@ -54,8 +54,11 @@ for (const file of commandFiles) {
     const command = require(filePath);
     
     // Установка команды в коллекцию
-    client.commands.set(command.data.name, command);
-    commands.push(command.data.toJSON());
+    client.commands.set(command.name || command.data.name, command);
+    commands.push(command.data ? command.data.toJSON() : {
+        name: command.name,
+        description: command.description
+    });
 }
 
 // Обработка события готовности бота
@@ -1563,7 +1566,7 @@ async function handleShopPurchase(interaction) {
 }
 
 // Обработка сообщений (для префиксных команд и квестов)
-client.on(Events.MessageCreate, message => {
+client.on(Events.MessageCreate, async message => {
     // Игнорируем сообщения от ботов
     if (message.author.bot) return;
     
@@ -1683,6 +1686,85 @@ client.on(Events.MessageCreate, message => {
         }
     } catch (error) {
         console.error('Ошибка при обновлении прогресса квеста:', error);
+    }
+    
+    // Проверяем автоматическую модерацию
+    try {
+        const { getGuildModerationConfig, checkMessageContent, checkSpam, applyModerationAction } = require('./System/moderationSystem');
+        const moderationConfig = getGuildModerationConfig(message.guild.id);
+        
+        // Если автомодерация включена
+        if (moderationConfig.automod.enabled) {
+            // Проверяем содержимое сообщения
+            const checkResult = checkMessageContent(message, moderationConfig);
+            
+            // Проверяем спам
+            const isSpam = checkSpam(message.author.id, message);
+            if (isSpam) {
+                checkResult.spam = true;
+                checkResult.severity += 2;
+            }
+            
+            // Если обнаружены нарушения
+            if (checkResult.severity > 0) {
+                // Определяем действие на основе количества предупреждений пользователя
+                const { getUserProfile } = require('./System/userProfiles');
+                const user = getUserProfile(message.author.id);
+                const warnings = user.warnings || 0;
+                
+                let action = null;
+                if (warnings >= moderationConfig.automod.actions.ban) {
+                    action = 'ban';
+                } else if (warnings >= moderationConfig.automod.actions.kick) {
+                    action = 'kick';
+                } else if (warnings >= moderationConfig.automod.actions.mute) {
+                    action = 'mute';
+                } else if (warnings >= moderationConfig.automod.actions.warn) {
+                    action = 'warn';
+                }
+                
+                if (action) {
+                    // Удаляем сообщение
+                    await message.delete().catch(() => {});
+                    
+                    // Применяем действие
+                    let reason = 'Нарушение правил сервера';
+                    if (checkResult.profanity) reason = 'Использование ненормативной лексики';
+                    if (checkResult.links) reason = 'Отправка запрещенных ссылок';
+                    if (checkResult.spam) reason = 'Спам';
+                    if (checkResult.caps) reason = 'Использование капса';
+                    if (checkResult.invites) reason = 'Отправка приглашений на другие серверы';
+                    
+                    await applyModerationAction(message, action, reason, checkResult.severity);
+                } else {
+                    // Просто удаляем сообщение если не достигнут порог предупреждений
+                    await message.delete().catch(() => {});
+                    
+                    // Отправляем пользователю предупреждение
+                    try {
+                        const warningEmbed = new EmbedBuilder()
+                            .setTitle('⚠️ Предупреждение')
+                            .setDescription(`Ваше сообщение на сервере **${message.guild.name}** было удалено за нарушение правил`)
+                            .addFields(
+                                { name: 'Причина', value: checkResult.profanity ? 'Ненормативная лексика' :
+                                    checkResult.links ? 'Запрещенная ссылка' :
+                                    checkResult.spam ? 'Спам' :
+                                    checkResult.caps ? 'Капс' :
+                                    checkResult.invites ? 'Приглашение на другой сервер' : 'Нарушение правил', inline: true }
+                            )
+                            .setColor('#FFA500')
+                            .setTimestamp();
+                        
+                        await message.author.send({ embeds: [warningEmbed] });
+                    } catch (error) {
+                        // Не удалось отправить личное сообщение
+                        console.log(`Не удалось отправить предупреждение пользователю ${message.author.id}`);
+                    }
+                }
+            }
+        }
+    } catch (moderationError) {
+        console.error('Ошибка при проверке автомодерации:', moderationError);
     }
 });
 

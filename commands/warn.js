@@ -1,5 +1,23 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { addWarning, removeWarning, getUserProfile } = require('../System/userProfiles');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+
+// Путь к файлу с предупреждениями
+const warningsPath = path.join(__dirname, '../System/warnings.json');
+
+// Загрузка предупреждений
+function loadWarnings() {
+    if (fs.existsSync(warningsPath)) {
+        const data = fs.readFileSync(warningsPath, 'utf8');
+        return JSON.parse(data);
+    }
+    return {};
+}
+
+// Сохранение предупреждений
+function saveWarnings(warnings) {
+    fs.writeFileSync(warningsPath, JSON.stringify(warnings, null, 2));
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -7,54 +25,172 @@ module.exports = {
         .setDescription('Выдать предупреждение пользователю')
         .addUserOption(option =>
             option.setName('user')
-                .setDescription('Пользователь, которому хотите выдать предупреждение')
+                .setDescription('Пользователь, которому вы хотите выдать предупреждение')
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('reason')
                 .setDescription('Причина предупреждения')
-                .setRequired(false)),
+                .setRequired(false))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
     async execute(interaction) {
-        // Проверяем права администратора
-        if (!interaction.member.permissions.has('Administrator')) {
-            return await interaction.reply({ 
-                content: 'У вас нет прав для использования этой команды!', 
-                ephemeral: true 
-            });
-        }
-
-        const targetUser = interaction.options.getUser('user');
-        const reason = interaction.options.getString('reason') || 'Нарушение правил';
+        const user = interaction.options.getUser('user');
+        const reason = interaction.options.getString('reason') || 'Причина не указана';
         const moderator = interaction.user;
 
-        // Выдаем предупреждение
-        const result = addWarning(targetUser.id, reason);
+        // Проверяем, что модератор не пытается выдать предупреждение себе
+        if (user.id === moderator.id) {
+            const selfWarnEmbed = new EmbedBuilder()
+                .setTitle('❌ Ошибка')
+                .setDescription('Вы не можете выдать предупреждение себе!')
+                .setColor('#ff0000')
+                .setTimestamp();
 
-        const targetUserProfile = getUserProfile(targetUser.id);
-        const embed = new EmbedBuilder()
-            .setTitle('Пользователь предупрежден')
-            .setDescription(`<@${moderator.id}> выдал(а) предупреждение пользователю <@${targetUser.id}>`)
-            .addFields(
-                { name: 'Причина', value: reason, inline: true },
-                { name: 'Всего предупреждений', value: `${result.warnings}`, inline: true }
-            )
-            .setColor('#8b00ff')
-            .setTimestamp();
-
-        // Проверяем, достиг ли пользователь 3 предупреждений
-        if (result.action === 'ban') {
-            embed.addFields({ name: 'Действие', value: 'Пользователь заблокирован (3 предупреждения)', inline: true });
-            
-            try {
-                // Пытаемся заблокировать пользователя
-                await interaction.guild.members.ban(targetUser, { reason: `Достигнуто 3 предупреждения: ${reason}` });
-            } catch (error) {
-                console.error('Ошибка при блокировке пользователя:', error);
-            }
-        } else if (result.action === 'mute') {
-            embed.addFields({ name: 'Действие', value: 'Пользователь замучен (2 предупреждения)', inline: true });
+            return await interaction.reply({ embeds: [selfWarnEmbed], ephemeral: true });
         }
 
-        await interaction.reply({ embeds: [embed] });
+        // Проверяем, что модератор не пытается выдать предупреждение боту
+        if (user.bot) {
+            const botWarnEmbed = new EmbedBuilder()
+                .setTitle('❌ Ошибка')
+                .setDescription('Вы не можете выдать предупреждение боту!')
+                .setColor('#ff0000')
+                .setTimestamp();
+
+            return await interaction.reply({ embeds: [botWarnEmbed], ephemeral: true });
+        }
+
+        try {
+            // Загружаем текущие предупреждения
+            const warnings = loadWarnings();
+            const guildId = interaction.guild.id;
+            const userId = user.id;
+
+            // Инициализируем запись для гильдии и пользователя, если её нет
+            if (!warnings[guildId]) {
+                warnings[guildId] = {};
+            }
+            if (!warnings[guildId][userId]) {
+                warnings[guildId][userId] = [];
+            }
+
+            // Создаем новое предупреждение
+            const newWarning = {
+                id: warnings[guildId][userId].length + 1,
+                moderatorId: moderator.id,
+                reason: reason,
+                timestamp: new Date().toISOString(),
+                active: true
+            };
+
+            // Добавляем предупреждение
+            warnings[guildId][userId].push(newWarning);
+            saveWarnings(warnings);
+
+            // Считаем общее количество активных предупреждений
+            const activeWarnings = warnings[guildId][userId].filter(w => w.active).length;
+
+            // Определяем действие на основе количества предупреждений
+            let actionTaken = '';
+            if (activeWarnings >= 3) {
+                actionTaken = '\n\n⚠️ Пользователь достиг 3 предупреждений. Рекомендуется рассмотреть мут или бан.';
+            } else if (activeWarnings >= 2) {
+                actionTaken = '\n\n⚠️ Пользователь достиг 2 предупреждений. Рассмотрите мут.';
+            }
+
+            // Создаем embed для уведомления
+            const warnEmbed = new EmbedBuilder()
+                .setTitle('⚠️ Предупреждение')
+                .setDescription(`<@${moderator.id}> выдал предупреждение пользователю <@${user.id}>`)
+                .addFields(
+                    { name: 'Причина', value: reason, inline: true },
+                    { name: 'Модератор', value: `<@${moderator.id}>`, inline: true },
+                    { name: 'Всего активных предупреждений', value: activeWarnings.toString(), inline: true },
+                    { name: 'ID предупреждения', value: newWarning.id.toString(), inline: true }
+                )
+                .setColor('#FFA500')
+                .setTimestamp();
+
+            if (actionTaken) {
+                warnEmbed.addFields({ name: 'Рекомендация', value: actionTaken, inline: false });
+            }
+
+            // Отправляем уведомление в канал
+            await interaction.reply({ embeds: [warnEmbed] });
+
+            // Отправляем личное сообщение пользователю о предупреждении
+            try {
+                const userWarnEmbed = new EmbedBuilder()
+                    .setTitle('⚠️ Вы получили предупреждение')
+                    .setDescription(`Вы получили предупреждение на сервере **${interaction.guild.name}**`)
+                    .addFields(
+                        { name: 'Модератор', value: `${moderator.tag}`, inline: true },
+                        { name: 'Причина', value: reason, inline: true },
+                        { name: 'Дата', value: `<t:${Math.floor(new Date().getTime()/1000)}:F>`, inline: false }
+                    )
+                    .setColor('#FFA500')
+                    .setTimestamp();
+
+                await user.send({ embeds: [userWarnEmbed] });
+            } catch (error) {
+                // Не удалось отправить личное сообщение
+                console.log(`Не удалось отправить предупреждение пользователю ${user.tag}`);
+            }
+
+            // Проверяем, нужно ли применить автоматические действия
+            if (activeWarnings === 1) {
+                // При первом предупреждении - предупреждение
+                console.log(`Пользователь ${user.tag} получил 1 предупреждение`);
+            } else if (activeWarnings === 2) {
+                // При втором предупреждении - мут на 1 час
+                try {
+                    const member = await interaction.guild.members.fetch(user.id);
+                    await member.timeout(60 * 1000, `Достигнуто 2 предупреждения: ${reason}`);
+                    
+                    const muteNotification = new EmbedBuilder()
+                        .setTitle('🔇 Временный мут')
+                        .setDescription(`<@${user.id}> был замучен на 1 час за достижение 2 предупреждений`)
+                        .addFields(
+                            { name: 'Причина', value: reason, inline: true },
+                            { name: 'Модератор', value: `<@${moderator.id}>`, inline: true }
+                        )
+                        .setColor('#808080')
+                        .setTimestamp();
+                    
+                    await interaction.followUp({ embeds: [muteNotification] });
+                } catch (muteError) {
+                    console.error('Ошибка при выдаче мута:', muteError);
+                }
+            } else if (activeWarnings >= 3) {
+                // При 3 и более предупреждениях - бан
+                try {
+                    await interaction.guild.members.ban(user, { reason: `Достигнуто 3+ предупреждений: ${reason}` });
+                    
+                    const banNotification = new EmbedBuilder()
+                        .setTitle('🔨 Блокировка')
+                        .setDescription(`<@${user.id}> был заблокирован за достижение 3+ предупреждений`)
+                        .addFields(
+                            { name: 'Причина', value: reason, inline: true },
+                            { name: 'Модератор', value: `<@${moderator.id}>`, inline: true }
+                        )
+                        .setColor('#800000')
+                        .setTimestamp();
+                    
+                    await interaction.followUp({ embeds: [banNotification] });
+                } catch (banError) {
+                    console.error('Ошибка при блокировке пользователя:', banError);
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка при выдаче предупреждения:', error);
+            
+            const errorEmbed = new EmbedBuilder()
+                .setTitle('❌ Ошибка')
+                .setDescription('Произошла ошибка при попытке выдать предупреждение.')
+                .setColor('#ff0000')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        }
     }
 };
