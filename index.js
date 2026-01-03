@@ -20,19 +20,19 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent, // Для обработки префиксных команд
-        GatewayIntentBits.GuildVoiceStates // Для обработки голосовых состояний
+        // GatewayIntentBits.GuildVoiceStates // Для обработки голосовых состояний
     ],
 });
 
-// Проверяем, что у нас есть корректная конфигурация узлов Lavalink
-if (!lavalinkConfig.nodes || !Array.isArray(lavalinkConfig.nodes) || lavalinkConfig.nodes.length === 0) {
-    console.error('Ошибка: Не найдена корректная конфигурация узлов Lavalink');
-    console.error('lavalinkConfig.nodes:', lavalinkConfig.nodes);
-    process.exit(1);
-}
+// // Проверяем, что у нас есть корректная конфигурация узлов Lavalink
+// if (!lavalinkConfig.nodes || !Array.isArray(lavalinkConfig.nodes) || lavalinkConfig.nodes.length === 0) {
+//     console.error('Ошибка: Не найдена корректная конфигурация узлов Lavalink');
+//     console.error('lavalinkConfig.nodes:', lavalinkConfig.nodes);
+//     process.exit(1);
+// }
 
-// Добавляем логирование для отладки
-// console.log('Конфигурация Lavalink:', JSON.stringify(lavalinkConfig.nodes, null, 2));
+// // Добавляем логирование для отладки
+// // console.log('Конфигурация Lavalink:', JSON.stringify(lavalinkConfig.nodes, null, 2));
 
 // Инициализируем Lavalink
 initializeLavalink(client, lavalinkConfig);
@@ -246,7 +246,7 @@ client.on(Events.InteractionCreate, async interaction => {
                             { name: '🎒 Инвентарь', value: 'Собирайте и просматривайте свои приобретения', inline: false },
                             { name: '⭐ Репутация', value: 'Выдайте репутацию другим участникам сервера', inline: false },
                             { name: '🔧 Модерация', value: 'Команды для модерации сервера (warn, kick, ban)', inline: false },
-                            { name: '🎵 Музыка', value: 'Воспроизводите музыку из YouTube', inline: false },
+                            // { name: '🎵 Музыка', value: 'Воспроизводите музыку из YouTube', inline: false },
                             { name: '🎁 Ежедневная награда', value: 'Получайте награды раз в день', inline: false },
                             { name: '🎊 События', value: 'Участвуйте в событиях и получайте награды', inline: false },
                             { name: '⚙️ Настройки', value: 'Персонализация опыта использования', inline: false }
