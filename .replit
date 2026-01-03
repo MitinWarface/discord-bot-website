@@ -1,0 +1,7 @@
+[run]
+command = "npm start"
+runInTerminal = true
+
+[language]
+id = "javascript"
+name = "JavaScript"

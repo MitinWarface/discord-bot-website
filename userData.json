@@ -1,0 +1,45 @@
+{
+  "260657491484868609": {
+    "id": "260657491484868609",
+    "username": "melory77",
+    "points": 140,
+    "level": 15,
+    "joinDate": "2026-01-01T20:14:03.023Z",
+    "lastInteraction": "2026-01-02T20:27:53.215Z",
+    "lastDaily": "2026-01-01T20:33:37.924Z",
+    "settings": {
+      "notifications": {
+        "quests": true,
+        "level": true
+      }
+    },
+    "guildId": "08WD2UC9",
+    "lastRepGiven": "2026-01-02T09:11:14.498Z",
+    "quests": [],
+    "inventory": [
+      {
+        "id": "basic_potion",
+        "name": "Базовое зелье",
+        "description": "Восстанавливает 10 очков",
+        "price": 50,
+        "type": "potion",
+        "effect": {
+          "points": 10
+        }
+      }
+    ]
+  },
+  "989905888850628638": {
+    "id": "989905888850628638",
+    "username": "ddakster",
+    "points": 57,
+    "level": 6,
+    "joinDate": "2026-01-02T08:42:56.567Z",
+    "lastInteraction": "2026-01-02T17:48:35.530Z",
+    "lastDaily": "2026-01-02T08:43:31.291Z",
+    "warnings": null,
+    "guildId": "08WD2UC9",
+    "reputation": null,
+    "quests": []
+  }
+}
