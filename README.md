@@ -211,33 +211,79 @@ npm run dev
 
 ### Запуск на Vercel
 
-Для развертывания бота на Vercel необходимо выполнить следующие шаги:
+Для развертывания веб-панели бота на Vercel выполните следующие шаги:
 
 1. Создайте аккаунт на [Vercel](https://vercel.com/)
-2. Установите CLI инструмент Vercel:
+2. Установите CLI инструмент Vercel (если еще не установлен):
    ```bash
    npm install -g vercel
    ```
-3. Инициализируйте проект Vercel в корневой директории:
+3. Свяжите проект с Vercel:
    ```bash
-   vercel
+   vercel link
    ```
 4. Следуйте инструкциям в терминале для настройки проекта
 5. Укажите `dashboard/server.js` как основной файл для сервера
-6. Установите необходимые Environment Variables в настройках проекта на Vercel:
-   - `DISCORD_TOKEN`: Токен вашего Discord бота
-   - `DISCORD_CLIENT_ID`: ID клиента Discord приложения
-   - `DISCORD_CLIENT_SECRET`: Секрет клиента Discord приложения
-   - `GUILD_ID`: ID сервера (опционально)
-   - `SESSION_SECRET`: Секрет для сессий
-   - `BASE_URL`: URL вашего развернутого приложения (например, https://your-app.vercel.app)
 
-7. После настройки переменных среды выполните деплой:
+6. Добавьте необходимые секреты (замените <your-values> на реальные значения):
+   ```bash
+   # Создать секреты
+   vercel secrets add discord_token <your-discord-token>
+   vercel secrets add discord_client_id <your-discord-client-id>
+   vercel secrets add discord_client_secret <your-discord-client-secret>
+   vercel secrets add guild_id <your-guild-id>
+   vercel secrets add session_secret <your-session-secret>
+   vercel secrets add base_url <your-base-url>
+   vercel secrets add youtube_token <your-youtube-token>
+   vercel secrets add openweather_api_key <your-openweather-api-key>
+   vercel secrets add lavalink_host <your-lavalink-host>
+   vercel secrets add lavalink_port <your-lavalink-port>
+   vercel secrets add lavalink_password <your-lavalink-password>
+   ```
+
+7. Свяжите секреты с переменными окружения проекта:
+   ```bash
+   # Связывание секретов с переменными окружения для всех сред (development, preview, production)
+   vercel env add DISCORD_TOKEN preview
+   vercel env add DISCORD_TOKEN production
+   
+   vercel env add DISCORD_CLIENT_ID preview
+   vercel env add DISCORD_CLIENT_ID production
+   
+   vercel env add DISCORD_CLIENT_SECRET preview
+   vercel env add DISCORD_CLIENT_SECRET production
+   
+   vercel env add GUILD_ID preview
+   vercel env add GUILD_ID production
+   
+   vercel env add SESSION_SECRET preview
+   vercel env add SESSION_SECRET production
+   
+   vercel env add BASE_URL preview
+   vercel env add BASE_URL production
+   
+   vercel env add YOUTUBE_TOKEN preview
+   vercel env add YOUTUBE_TOKEN production
+   
+   vercel env add OPENWEATHER_API_KEY preview
+   vercel env add OPENWEATHER_API_KEY production
+   
+   vercel env add LAVALINK_HOST preview
+   vercel env add LAVALINK_HOST production
+   
+   vercel env add LAVALINK_PORT preview
+   vercel env add LAVALINK_PORT production
+   
+   vercel env add LAVALINK_PASSWORD preview
+   vercel env add LAVALINK_PASSWORD production
+   ```
+
+8. Выполните деплой проекта:
    ```bash
    vercel --prod
    ```
 
-После успешного деплоя ваша веб-панель будет доступна по адресу, предоставленному Vercel, а бот продолжит работать отдельно по указанному токену. Обратите внимание, что для полноценной работы бота на Vercel, вам потребуется отдельный процесс для запуска основного бота (index.js), так как Vercel не поддерживает одновременный запуск нескольких процессов в одном инстансе.
+После успешного деплоя ваша веб-панель будет доступна по адресу, предоставленному Vercel, а бот продолжит работать отдельно по указанному токену. Обратите внимание, что для полноценной работы бота, вам потребуется отдельный процесс для запуска основного бота (index.js), так как Vercel не поддерживает одновременный запуск нескольких процессов в одном инстансе.
 
 ---
 
