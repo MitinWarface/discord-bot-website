@@ -10,7 +10,8 @@
       "both": "concurrently \"node index.js\" \"node dashboard/server.js\"",
       "check": "node check-config.js",
       "vercel-setup": "node scripts/vercel-setup.js",
-      "replit": "node index.js & node dashboard/server.js"
+      "replit": "node index.js & node dashboard/server.js",
+      "vercel-build": "echo 'Build completed'"
   },
   "keywords": [
     "discord",

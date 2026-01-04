@@ -1,91 +1,114 @@
+#!/usr/bin/env node
+
+/**
+ * Скрипт для подготовки проекта к деплою на Vercel
+ * Этот скрипт проверяет необходимые файлы и настройки для Vercel
+ */
+
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
-// Функция для проверки существования команды
-function commandExists(command) {
-    try {
-        execSync(command, { stdio: 'pipe' });
-        return true;
-    } catch (error) {
-        return false;
-    }
-}
+console.log('Подготовка проекта к деплою на Vercel...');
 
-// Проверяем, установлен ли Vercel CLI
-if (!commandExists('vercel --version')) {
-    console.error('Vercel CLI не установлен. Установите его с помощью: npm install -g vercel');
-    process.exit(1);
-}
-
-// Читаем файл .env
-const envPath = path.join(__dirname, '../.env');
-if (!fs.existsSync(envPath)) {
-    console.error('Файл .env не найден в корне проекта');
-    process.exit(1);
-}
-
-const envContent = fs.readFileSync(envPath, 'utf8');
-const envLines = envContent.split('\n');
-
-// Объект для хранения переменных из .env
-const envVars = {};
-
-// Парсим переменные из .env файла
-for (const line of envLines) {
-    if (line.trim() && !line.startsWith('#')) {
-        const [key, ...valueParts] = line.split('=');
-        const trimmedKey = key.trim();
-        const trimmedValue = valueParts.join('=').trim(); // Сохраняем полное значение, включая '=' внутри
-        
-        if (trimmedKey && trimmedValue) {
-            envVars[trimmedKey] = trimmedValue;
-        }
-    }
-}
-
-// Основные переменные, которые нужно установить в Vercel
-const requiredVars = [
-    'DISCORD_TOKEN',
-    'DISCORD_CLIENT_ID', 
-    'DISCORD_CLIENT_SECRET',
-    'GUILD_ID',
-    'SESSION_SECRET',
-    'BASE_URL',
-    'YOUTUBE_TOKEN',
-    'OPENWEATHER_API_KEY',
-    'LAVALINK_HOST',
-    'LAVALINK_PORT',
-    'LAVALINK_PASSWORD'
+// Проверяем наличие необходимых файлов
+const requiredFiles = [
+  'vercel.json',
+  'package.json',
+  'index.js',
+  'dashboard/server.js',
+  'api/index.js'
 ];
 
-console.log('Начинаем настройку переменных окружения Vercel...');
-
-// Устанавливаем каждую переменную
-for (const varName of requiredVars) {
-    if (envVars[varName]) {
-        try {
-            // Проверяем, существует ли уже такой секрет
-            try {
-                execSync(`vercel secrets inspect ${varName.toLowerCase()}`, { stdio: 'pipe' });
-                console.log(`Секрет ${varName.toLowerCase()} уже существует, пропускаем...`);
-            } catch (inspectError) {
-                // Секрет не существует, создаем его
-                console.log(`Создание секрета для ${varName}...`);
-                execSync(`vercel secrets add ${varName.toLowerCase()} "${envVars[varName]}"`, { stdio: 'inherit' });
-            }
-            
-            // Связываем секрет с переменной окружения для всех сред
-            console.log(`Связывание ${varName} с секретом...`);
-            execSync(`vercel env add ${varName} preview`, { stdio: 'inherit' });
-            execSync(`vercel env add ${varName} production`, { stdio: 'inherit' });
-        } catch (error) {
-            console.error(`Ошибка при настройке переменной ${varName}:`, error.message);
-        }
-    } else {
-        console.warn(`Предупреждение: Переменная ${varName} не найдена в .env файле`);
-    }
+let allFilesExist = true;
+for (const file of requiredFiles) {
+  if (!fs.existsSync(file)) {
+    console.error(`❌ Файл ${file} не найден!`);
+    allFilesExist = false;
+ } else {
+    console.log(`✅ Файл ${file} найден`);
+  }
 }
 
-console.log('Настройка переменных окружения Vercel завершена!');
-console.log('Теперь выполните: vercel --prod');
+if (!allFilesExist) {
+  console.error('❌ Не все необходимые файлы для Vercel найдены. Завершение.');
+  process.exit(1);
+}
+
+// Проверяем package.json на наличие необходимых скриптов
+const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const requiredScripts = ['start', 'vercel-build'];
+
+let allScriptsExist = true;
+for (const script of requiredScripts) {
+  if (!packageJson.scripts[script]) {
+    console.error(`❌ Скрипт ${script} не найден в package.json!`);
+    allScriptsExist = false;
+  } else {
+    console.log(`✅ Скрипт ${script} найден`);
+  }
+}
+
+if (!allScriptsExist) {
+  console.error('❌ Не все необходимые скрипты для Vercel найдены. Завершение.');
+  process.exit(1);
+}
+
+// Проверяем зависимости
+const requiredDependencies = [
+  'express',
+  'discord.js',
+  'dotenv',
+  'passport-discord',
+  'express-session'
+];
+
+let allDepsExist = true;
+const allDependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+
+for (const dep of requiredDependencies) {
+  if (!allDependencies[dep]) {
+    console.error(`❌ Зависимость ${dep} не найдена в package.json!`);
+    allDepsExist = false;
+  } else {
+    console.log(`✅ Зависимость ${dep} найдена`);
+  }
+}
+
+if (!allDepsExist) {
+  console.error('❌ Не все необходимые зависимости для Vercel найдены. Завершение.');
+  process.exit(1);
+}
+
+// Создаем .env.example если его нет
+const envExamplePath = '.env.example';
+if (!fs.existsSync(envExamplePath)) {
+  const envContent = `# Discord Bot Configuration
+DISCORD_TOKEN=your_discord_bot_token_here
+GUILD_ID=your_guild_id_here
+DISCORD_CLIENT_ID=your_discord_client_id_here
+DISCORD_CLIENT_SECRET=your_discord_client_secret_here
+
+# Dashboard Configuration
+BASE_URL=https://your-vercel-project-url.vercel.app
+SESSION_SECRET=your_session_secret_here
+
+# Lavalink Configuration (if using)
+LAVALINK_HOST=your_lavalink_host
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=your_lavalink_password
+
+# Port Configuration
+PORT=3000
+`;
+  fs.writeFileSync(envExamplePath, envContent);
+  console.log(`✅ Файл ${envExamplePath} создан`);
+} else {
+ console.log(`✅ Файл ${envExamplePath} уже существует`);
+}
+
+console.log('✅ Подготовка к деплою на Vercel завершена успешно!');
+console.log('\nДля деплоя на Vercel:');
+console.log('1. Установите Vercel CLI: npm install -g vercel');
+console.log('2. Залогиньтесь: vercel login');
+console.log('3. Задеплойте проект: vercel --prod');
+console.log('\nНе забудьте добавить переменные окружения в настройках проекта на Vercel!');

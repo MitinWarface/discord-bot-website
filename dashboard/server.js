@@ -444,5 +444,3 @@ app.listen(PORT, () => {
 
 // Экспортируем приложение для Vercel
 module.exports = app;
-
-module.exports = app;
