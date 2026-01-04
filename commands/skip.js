@@ -25,10 +25,10 @@ module.exports = {
                 const embed = new EmbedBuilder()
                     .setTitle('❌ Ошибка')
                     .setDescription(result.message)
-                    .setColor('#ff000')
+                    .setColor('#ff0000')
                     .setTimestamp();
-                
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+            
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             }
         } catch (error) {
             console.error('Ошибка при пропуске трека:', error);

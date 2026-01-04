@@ -1,46 +1,82 @@
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
+const path = require('path');
 
 module.exports = {
-  name: 'closeticket',
- description: 'Закрыть тикет по ID',
-  execute(message, args) {
-    // Проверка прав администратора
-    if (!message.member.permissions.has('ADMINISTRATOR')) {
-      return message.reply('У вас нет прав для закрытия тикетов.');
-    }
+    data: new SlashCommandBuilder()
+        .setName('closeticket')
+        .setDescription('Закрыть тикет по ID')
+        .addIntegerOption(option =>
+            option.setName('ticket_id')
+                .setDescription('ID тикета для закрытия')
+                .setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-    const ticketId = parseInt(args[0]);
-    if (isNaN(ticketId)) {
-      return message.reply('Пожалуйста, укажите корректный ID тикета.');
-    }
+    async execute(interaction) {
+        const ticketId = interaction.options.getInteger('ticket_id');
+        
+        // Чтение тикетов из файла
+        let tickets = [];
+        try {
+            const ticketsPath = path.join(__dirname, '../tickets.json');
+            if (fs.existsSync(ticketsPath)) {
+                const data = fs.readFileSync(ticketsPath, 'utf8');
+                tickets = JSON.parse(data).tickets || [];
+            }
+        } catch (err) {
+            console.error('Ошибка чтения файла тикетов:', err);
+            
+            const errorEmbed = new EmbedBuilder()
+                .setTitle('❌ Ошибка')
+                .setDescription('Произошла ошибка при чтении тикетов.')
+                .setColor('#ff0000')
+                .setTimestamp();
+            
+            return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        }
 
-    // Чтение тикетов из файла
-    let tickets = [];
-    try {
-      const data = fs.readFileSync('tickets.json', 'utf8');
-      tickets = JSON.parse(data).tickets;
-    } catch (err) {
-      console.error('Ошибка чтения файла тикетов:', err);
-      return message.reply('Произошла ошибка при чтении тикетов.');
-    }
+        // Поиск и обновление тикета
+        const ticketIndex = tickets.findIndex(ticket => ticket.id === ticketId);
+        if (ticketIndex === -1) {
+            const notFoundEmbed = new EmbedBuilder()
+                .setTitle('❌ Ошибка')
+                .setDescription(`Тикет с ID ${ticketId} не найден.`)
+                .setColor('#ff0000')
+                .setTimestamp();
+            
+            return await interaction.reply({ embeds: [notFoundEmbed], ephemeral: true });
+        }
 
-    // Поиск и обновление тикета
-    const ticketIndex = tickets.findIndex(ticket => ticket.id === ticketId);
-    if (ticketIndex === -1) {
-      return message.reply(`Тикет с ID ${ticketId} не найден.`);
-    }
+        tickets[ticketIndex].status = 'closed';
+        tickets[ticketIndex].closedAt = new Date().toISOString();
+        tickets[ticketIndex].closedBy = interaction.user.id;
 
-    tickets[ticketIndex].status = 'closed';
-    tickets[ticketIndex].closedAt = new Date().toISOString();
-    tickets[ticketIndex].closedBy = message.author.username;
-
-    // Сохранение обновленных тикетов
-    try {
-      fs.writeFileSync('tickets.json', JSON.stringify({ tickets: tickets }, null, 2));
-      message.reply(`Тикет с ID ${ticketId} успешно закрыт.`);
-    } catch (err) {
-      console.error('Ошибка записи файла тикетов:', err);
-      message.reply('Произошла ошибка при сохранении тикета.');
+        // Сохранение обновленных тикетов
+        try {
+            const ticketsPath = path.join(__dirname, '../tickets.json');
+            fs.writeFileSync(ticketsPath, JSON.stringify({ tickets: tickets }, null, 2));
+            
+            const successEmbed = new EmbedBuilder()
+                .setTitle('✅ Тикет закрыт')
+                .setDescription(`Тикет с ID ${ticketId} успешно закрыт.`)
+                .addFields(
+                    { name: 'Закрыл', value: `<@${interaction.user.id}>`, inline: true },
+                    { name: 'ID тикета', value: ticketId.toString(), inline: true }
+                )
+                .setColor('#57f287')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [successEmbed] });
+        } catch (err) {
+            console.error('Ошибка записи файла тикетов:', err);
+            
+            const errorEmbed = new EmbedBuilder()
+                .setTitle('❌ Ошибка')
+                .setDescription('Произошла ошибка при сохранении тикета.')
+                .setColor('#ff0000')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        }
     }
-  }
 };

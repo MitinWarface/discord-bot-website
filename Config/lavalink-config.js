@@ -13,6 +13,17 @@ const lavalinkConfig = {
             // Опции для ускоренного подключения к удаленному серверу
             retryDelay: 100, // Минимальная задержка между попытками переподключения (в мс)
             maxRetries: 5     // Количество попыток подключения
+        },
+        // Добавляем резервный узел
+        {
+            id: 'Backup',
+            host: process.env.LAVALINK_HOST_BACKUP || 'lava-v4.ajieblogs.eu.org',
+            port: parseInt(process.env.LAVALINK_PORT_BACKUP) || 443,
+            authorization: process.env.LAVALINK_PASSWORD_BACKUP || 'https://dsc.gg/ajidevserver',
+            secure: process.env.LAVALINK_SECURE_BACKUP === 'true' || true, // SSL для порта 443
+            // Опции для ускоренного подключения к удаленному серверу
+            retryDelay: 100, // Минимальная задержка между попытками переподключения (в мс)
+            maxRetries: 5     // Количество попыток подключения
         }
     ],
     options: {

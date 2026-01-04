@@ -37,6 +37,9 @@ module.exports = {
                 const embed = new EmbedBuilder()
                     .setTitle('🎵 Воспроизведение')
                     .setDescription(result.message)
+                    .addFields(
+                        { name: 'Запрошено', value: `<@${interaction.user.id}>`, inline: true }
+                    )
                     .setColor('#8b00ff')
                     .setTimestamp();
                 

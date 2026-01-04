@@ -36,7 +36,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle('❌ Ошибка')
                 .setDescription('Произошла ошибка при попытке остановить воспроизведение.')
-                .setColor('#ff00')
+                .setColor('#ff0000')
                 .setTimestamp();
             
             await interaction.reply({ embeds: [embed], ephemeral: true });

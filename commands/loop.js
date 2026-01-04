@@ -25,7 +25,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle('❌ Ошибка')
                 .setDescription('Произошла ошибка при попытке переключить повтор.')
-                .setColor('#ff000')
+                .setColor('#ff0000')
                 .setTimestamp();
             
             await interaction.reply({ embeds: [embed], ephemeral: true });

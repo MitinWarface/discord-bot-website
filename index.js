@@ -5,7 +5,6 @@ dotenv.config(); // Загружаем переменные окружения �
 const fs = require('fs');
 const path = require('path');
 const { updateUserProfile, getUserProfile, getTopUsers, canClaimDaily, claimDaily } = require('./System/userProfiles');
-const { giveReputation, canGiveReputation, getReputation } = require('./System/repSystem');
 const shopItems = require('./shopItems');
 const NotificationSystem = require('./System/notificationSystem');
 const { getUpcomingEvents, cleanupPastEvents } = require('./System/eventSystem');
@@ -41,7 +40,7 @@ const commands = [];
 
 // Список команд, которые содержат подкоманды и могут вызвать ошибки
 const commandsWithSubcommands = [
-    'automod.js', 'customcommand.js', 'economy.js', 'event.js', 'events.js', 
+    'automod.js', 'customcommand.js', 'economy.js', 'event.js', 'events.js',
     'games.js', 'guild.js', 'level.js', 'logging.js', 'quests.js',
     'reactionrole.js', 'serverstats.js', 'ticket.js'
 ];

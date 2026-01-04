@@ -1,7 +1,8 @@
-// Заглушка для музыкальной системы, так как полная реализация требует дополнительных зависимостей
+// Полнофункциональная музыкальная система с использованием lavalink-client
 const { EmbedBuilder } = require('discord.js');
+const { LavalinkManager, Track } = require('lavalink-client');
 
-// Имитация клиента Lavalink
+// Глобальные переменные для хранения клиента и менеджера плееров
 let lavalinkClient = null;
 let playerManager = null;
 
@@ -9,12 +10,17 @@ let playerManager = null;
 const musicQueue = new Map();
 
 class PlayerManager {
-    constructor() {
+    constructor(lavalink) {
+        this.lavalink = lavalink;
         this.players = new Map();
     }
 
-    createPlayer(guildId, node) {
-        const player = new Player(node, guildId);
+    createPlayer(guildId) {
+        const player = this.lavalink.createPlayer({
+            guildId: guildId,
+            deafen: true,
+            volume: 100,
+        });
         this.players.set(guildId, player);
         return player;
     }
@@ -36,97 +42,148 @@ class PlayerManager {
     }
 }
 
-class Player {
-    constructor(node, guildId) {
-        this.node = node;
-        this.guildId = guildId;
-        this.player = null;
-        this.track = null;
-        this.paused = false;
-        this.volume = 100;
-        this.queue = [];
-        this.loop = false;
-        this.textChannel = null;
-    }
-
-    async connect(voiceChannelId, options = {}) {
-        // Заглушка для подключения
-        console.log(`[Lavalink] Подключение к голосовому каналу ${voiceChannelId} для гильдии ${this.guildId}`);
-        return { connected: true };
-    }
-
-    async playTrack(track) {
-        // Заглушка для воспроизведения трека
-        this.track = track;
-        console.log(`[Lavalink] Воспроизведение трека: ${track.title}`);
-    }
-
-    async stop() {
-        // Заглушка для остановки
-        console.log('[Lavalink] Остановка воспроизведения');
-    }
-
-    async pause(pause = true) {
-        // Заглушка для паузы
-        this.paused = pause;
-        console.log(`[Lavalink] Пауза установлено: ${pause}`);
-    }
-
-    async setVolume(volume) {
-        // Заглушка для установки громкости
-        const normalizedVolume = Math.min(150, Math.max(0, volume));
-        this.volume = normalizedVolume;
-        console.log(`[Lavalink] Громкость установлена: ${normalizedVolume}%`);
-    }
-
-    async disconnect() {
-        // Заглушка для отключения
-        console.log('[Lavalink] Отключение от голосового канала');
-        this.player = null;
-    }
-
-    destroy() {
-        this.stop().catch(() => {});
-        this.disconnect().catch(() => {});
-        this.track = null;
-        this.queue = [];
-    }
-}
-
 async function initializeLavalink(client, lavalinkFullConfig) {
-    console.log('[Lavalink] Инициализация системы (заглушка)...');
+    console.log('[Lavalink] Инициализация системы...');
     
-    // Создаем фейковый клиент Lavalink
-    lavalinkClient = {
-        nodes: new Map(),
-        bestNode: null,
-        connect: async () => {
-            console.log('[Lavalink] Подключение к узлам...');
-        }
-    };
-    
-    // Добавляем фейковый узел
-    const fakeNode = {
-        id: 'fake-node',
-        connected: true,
-        ping: 0,
-        connect: async () => {},
-        disconnect: async () => {}
-    };
-    
-    lavalinkClient.nodes.set('fake-node', fakeNode);
-    lavalinkClient.bestNode = fakeNode;
-    
-    // Инициализируем менеджер плееров
-    playerManager = new PlayerManager();
-    
-    console.log('[Lavalink] Система инициализирована (заглушка)');
-    return lavalinkClient;
+    try {
+        // Создаем клиент Lavalink
+        lavalinkClient = new LavalinkManager({
+            nodes: lavalinkFullConfig.nodes,
+            sendToShard: (guildId, payload) => {
+                const guild = client.guilds.cache.get(guildId);
+                if (guild) {
+                    guild.shard.send(payload);
+                }
+            },
+            defaultSearchPlatform: 'youtube',
+            playerOptions: {
+                volumeDecrementer: 0.75,
+                // Отключаем нормализацию громкости
+                // muteManager: false,
+            },
+            queueOptions: {
+                maxPreviousTracks: 25,
+            },
+        });
+
+        // Инициализируем менеджер плееров
+        playerManager = new PlayerManager(lavalinkClient);
+        
+        // Обработчики событий
+        lavalinkClient.on('nodeConnect', (node) => {
+            console.log(`[Lavalink] Подключен к узлу: ${node.id}`);
+        });
+
+        lavalinkClient.on('nodeReconnect', (node) => {
+            console.log(`[Lavalink] Переподключение к узлу: ${node.id}`);
+        });
+
+        lavalinkClient.on('nodeDisconnect', (node, reason) => {
+            console.log(`[Lavalink] Отключен от узла: ${node.id}`, reason);
+        });
+
+        lavalinkClient.on('nodeError', (node, error) => {
+            console.error(`[Lavalink] Ошибка узла ${node.id}:`, error);
+        });
+
+        // Обработчик события начала воспроизведения трека
+        lavalinkClient.on('trackStart', (player, track) => {
+            console.log(`[Lavalink] Началось воспроизведение трека: ${track.info.title}`);
+            
+            // Отправляем сообщение о начале воспроизведения
+            const textChannel = client.channels.cache.get(player.textChannelId);
+            if (textChannel) {
+                const embed = new EmbedBuilder()
+                    .setTitle('🎵 Воспроизведение началось')
+                    .setDescription(`Сейчас играет: **${track.info.title}**`)
+                    .setURL(track.info.uri)
+                    .setThumbnail(track.info.artworkUrl)
+                    .addFields(
+                        { name: 'Автор', value: track.info.author, inline: true },
+                        { name: 'Длительность', value: formatTime(track.info.length), inline: true },
+                        { name: 'Запрошено', value: `<@${track.requester}>`, inline: false }
+                    )
+                    .setColor('#8b00ff')
+                    .setTimestamp();
+                
+                textChannel.send({ embeds: [embed] }).catch(console.error);
+            }
+        });
+
+        // Обработчик события завершения воспроизведения трека
+        lavalinkClient.on('trackEnd', (player, track, reason) => {
+            console.log(`[Lavalink] Завершено воспроизведение трека: ${track.info.title}, причина: ${reason}`);
+            
+            // Если трек завершился нормально, а не из-за остановки, пропуска или ошибки
+            if (reason === 'FINISHED') {
+                // Получаем очередь для гильдии
+                const queue = musicQueue.get(player.guildId);
+                if (queue && queue.tracks.length > 0) {
+                    // Если включена опция loop (повтор), добавляем трек обратно в очередь
+                    if (queue.loop) {
+                        queue.tracks.push(track);
+                    }
+                    
+                    // Воспроизводим следующий трек
+                    playNextTrack(player.guildId);
+                } else {
+                    // Если очередь пуста, отключаемся от голосового канала
+                    setTimeout(() => {
+                        const currentPlayer = playerManager.getPlayer(player.guildId);
+                        if (currentPlayer && currentPlayer.playing) {
+                            // Проверяем, все ли участники в голосовом канале
+                            const voiceChannel = client.channels.cache.get(currentPlayer.voiceChannelId);
+                            if (voiceChannel && voiceChannel.members.size <= 1) {
+                                // Только бот, отключаемся
+                                stop(player.guildId);
+                            }
+                        }
+                    }, 60000); // Отключаемся через 1 минуту, если очередь пуста
+                }
+            }
+        });
+
+        // Обработчик ошибок трека
+        lavalinkClient.on('trackError', (player, track, error) => {
+            console.error(`[Lavalink] Ошибка воспроизведения трека: ${track.info.title}`, error);
+            
+            const textChannel = client.channels.cache.get(player.textChannelId);
+            if (textChannel) {
+                const embed = new EmbedBuilder()
+                    .setTitle('❌ Ошибка воспроизведения')
+                    .setDescription(`Ошибка при воспроизведении: **${track.info.title}**`)
+                    .addFields(
+                        { name: 'Ошибка', value: error.message.substring(0, 1024), inline: false }
+                    )
+                    .setColor('#ff000')
+                    .setTimestamp();
+                
+                textChannel.send({ embeds: [embed] }).catch(console.error);
+            }
+            
+            // Пробуем воспроизвести следующий трек
+            const queue = musicQueue.get(player.guildId);
+            if (queue && queue.tracks.length > 0) {
+                playNextTrack(player.guildId);
+            }
+        });
+
+        // Обработчик события изменения состояния плеера
+        lavalinkClient.on('playerUpdate', (player, event) => {
+            console.log(`[Lavalink] Обновление состояния плеера для гильдии ${player.guildId}`);
+        });
+
+        console.log('[Lavalink] Система инициализирована');
+        return lavalinkClient;
+    } catch (error) {
+        console.error('[Lavalink] Ошибка при инициализации:', error);
+        throw error;
+    }
 }
 
 // Функция для проверки инициализации Lavalink
 function isLavalinkReady() {
-    return !!lavalinkClient && !!lavalinkClient.bestNode;
+    return !!lavalinkClient;
 }
 
 // Функция для получения детальной информации о состоянии Lavalink
@@ -134,25 +191,23 @@ function getLavalinkStatus() {
     if (!lavalinkClient) {
         return {
             lavalink: false,
-            bestNode: false,
             nodes: 0,
             connectedNodes: 0,
             hasNodes: false,
             ready: false
         };
     }
-    
-    const nodes = Array.from(lavalinkClient.nodes.values());
-    const connectedNodes = nodes.filter(node => node.connected);
-    
+
+    const nodes = lavalinkClient.nodes;
+    const connectedNodes = Array.from(nodes.values()).filter(node => node.connected);
+
     return {
         lavalink: !!lavalinkClient,
-        bestNode: !!lavalinkClient.bestNode,
-        nodes: nodes.length,
+        nodes: nodes.size,
         connectedNodes: connectedNodes.length,
-        hasNodes: nodes.length > 0,
+        hasNodes: nodes.size > 0,
         ready: isLavalinkReady(),
-        nodeDetails: nodes.map(node => ({
+        nodeDetails: Array.from(nodes.values()).map(node => ({
             id: node.id,
             connected: node.connected,
             ping: node.ping || 0
@@ -171,8 +226,73 @@ function connectToVoiceChannel(interaction) {
     return { success: true, voiceChannel, memberId: interaction.member.id };
 }
 
+// Функция форматирования времени
+function formatTime(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+        return `${hours}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+
+// Функция для поиска трека
+async function searchTrack(query) {
+    try {
+        // Проверяем, является ли запрос ссылкой
+        if (query.startsWith('http')) {
+            // Прямая ссылка
+            const result = await lavalinkClient.search(query, { requester: 'System' });
+            return result;
+        } else {
+            // Поиск по названию
+            const result = await lavalinkClient.search(query, { requester: 'System' });
+            return result;
+        }
+    } catch (error) {
+        console.error('Ошибка при поиске трека:', error);
+        throw error;
+    }
+}
+
+// Воспроизведение следующего трека в очереди
+async function playNextTrack(guildId) {
+    try {
+        const queue = musicQueue.get(guildId);
+        if (!queue || !queue.tracks.length) {
+            // Очередь пуста, останавливаем воспроизведение
+            const player = playerManager.getPlayer(guildId);
+            if (player) {
+                player.stop();
+                // Удаляем очередь
+                musicQueue.delete(guildId);
+            }
+            return;
+        }
+
+        // Получаем первый трек из очереди
+        const track = queue.tracks.shift();
+        const player = playerManager.getPlayer(guildId);
+
+        if (player) {
+            // Устанавливаем текстовый канал для плеера
+            player.textChannelId = queue.textChannel.id;
+            player.voiceChannelId = queue.voiceChannel.id;
+
+            // Воспроизводим трек
+            await player.play(track);
+        }
+    } catch (error) {
+        console.error('Ошибка при воспроизведении следующего трека:', error);
+    }
+}
+
 // Воспроизведение трека
-async function playTrack(interaction, query) {
+async function playTrack(interaction, query, shuffle = false) {
+    console.log(`[Lavalink] Попытка воспроизвести трек: ${query} для гильдии ${interaction.guild.id}`);
+    const startTime = Date.now();
     try {
         // Проверяем, инициализирован ли Lavalink
         if (!isLavalinkReady()) {
@@ -186,6 +306,27 @@ async function playTrack(interaction, query) {
             return connectionResult;
         }
 
+        // Поиск трека
+        let searchResult;
+        try {
+            searchResult = await searchTrack(query);
+        } catch (searchError) {
+            console.error('Ошибка при поиске трека:', searchError);
+            return { success: false, message: 'Ошибка при поиске трека. Пожалуйста, попробуйте позже.' };
+        }
+
+        if (!searchResult || !searchResult.tracks || searchResult.tracks.length === 0) {
+            return { success: false, message: 'Трек не найден!' };
+        }
+
+        // Выбираем первый трек из результата поиска
+        const track = searchResult.tracks[0];
+        if (!track) {
+            return { success: false, message: 'Не удалось получить трек из результатов поиска.' };
+        }
+
+        track.requester = interaction.user.id; // Устанавливаем requester
+
         // Получаем существующую очередь или создаем новую
         let queue = musicQueue.get(interaction.guild.id);
         if (!queue) {
@@ -193,23 +334,12 @@ async function playTrack(interaction, query) {
                 tracks: [],
                 voiceChannel: connectionResult.voiceChannel,
                 loop: false,
-                volume: 100,
+                volume: 100, // Исправляем начальный уровень громкости
                 textChannel: interaction.channel
             };
 
             musicQueue.set(interaction.guild.id, queue);
         }
-
-        // Создаем фейковый трек (в реальной реализации здесь будет поиск через Lavalink)
-        const fakeTrack = {
-            title: query,
-            uri: '',
-            duration: 0,
-            author: 'Неизвестно',
-            requestedBy: interaction.user,
-            requesterId: interaction.member.id,
-            encoded: '' // Закодированная информация о треке
-        };
 
         // Проверяем максимальный размер очереди
         const maxQueueSize = parseInt(process.env.MAX_QUEUE_SIZE) || 100;
@@ -217,175 +347,304 @@ async function playTrack(interaction, query) {
             return { success: false, message: `Очередь достигла максимального размера (${maxQueueSize})!` };
         }
 
-        queue.tracks.push(fakeTrack);
+        // Добавляем трек в очередь
+        queue.tracks.push(track);
+        if (shuffle) {
+            // Перемешиваем очередь, но оставляем первый трек на месте если очередь была пуста
+            if (queue.tracks.length > 1) {
+                // Сохраняем первый элемент
+                const firstTrack = queue.tracks.shift();
+                // Перемешиваем остальные
+                for (let i = queue.tracks.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [queue.tracks[i], queue.tracks[j]] = [queue.tracks[j], queue.tracks[i]];
+                }
+                // Возвращаем первый элемент обратно
+                queue.tracks.unshift(firstTrack);
+            }
+        }
+
         musicQueue.set(interaction.guild.id, queue);
 
         // Получаем или создаем плеер
-        let player = playerManager.getPlayer(interaction.guild.id);
+        let player = playerManager ? playerManager.getPlayer(interaction.guild.id) : null;
         if (!player) {
-            // Используем фейковый узел
-            const fakeNode = lavalinkClient.bestNode;
-            player = playerManager.createPlayer(interaction.guild.id, fakeNode);
-            player.textChannel = interaction.channel;
+            if (!playerManager) {
+                console.error('PlayerManager не инициализирован');
+                return { success: false, message: 'Система воспроизведения не готова. Пожалуйста, повторите попытку позже.' };
+            }
+            player = playerManager.createPlayer(interaction.guild.id);
         }
 
         // Подключаемся к голосовому каналу если еще не подключены
-        if (!player.player) {
-            await player.connect(connectionResult.voiceChannel.id);
-            player.volume = queue.volume;
+        if (!player.voiceChannelId) {
+            try {
+                await player.connect(connectionResult.voiceChannel.id, { deaf: true });
+                player.setVolume(queue.volume);
+            } catch (connectionError) {
+                console.error('Ошибка подключения к голосовому каналу:', connectionError);
+                // Удаляем созданную очередь, если не удалось подключиться
+                musicQueue.delete(interaction.guild.id);
+                return { success: false, message: 'Не удалось подключиться к голосовому каналу.' };
+            }
         }
 
-        // Если это первый трек в очереди, начинаем воспроизведение (в реальной реализации)
+        // Устанавливаем текстовый канал
+        player.textChannelId = interaction.channel.id;
+        player.voiceChannelId = connectionResult.voiceChannel.id;
+
+        // Если это первый трек в очереди, начинаем воспроизведение
         if (queue.tracks.length === 1) {
-            // В реальной системе здесь будет вызов playNextTrack
+            await playNextTrack(interaction.guild.id);
         }
 
         return {
             success: true,
-            track: fakeTrack,
-            message: `Трек добавлен в очередь: **${fakeTrack.title}**`
+            track: track,
+            message: `Трек добавлен в очередь: **${track.info.title}**`
         };
     } catch (error) {
-        console.error('Ошибка при воспроизведении трека:', error);
-        return { success: false, message: 'Произошла ошибка при попытке воспроизвести трек!' };
+        console.error('Критическая ошибка при воспроизведении трека:', error);
+        // В случае критической ошибки удаляем очередь, чтобы избежать проблем
+        musicQueue.delete(interaction.guild.id);
+        const duration = Date.now() - startTime;
+        console.log(`[Lavalink] Ошибка воспроизведения завершена за ${duration}мс`);
+        return { success: false, message: 'Произошла критическая ошибка при попытке воспроизвести трек!' };
     }
+    const duration = Date.now() - startTime;
+    console.log(`[Lavalink] Воспроизведение трека завершено за ${duration}мс`);
 }
 
 // Получение очереди треков
 function getQueue(guildId) {
-    return musicQueue.get(guildId) || { tracks: [], loop: false, volume: 100 };
+    try {
+        const queue = musicQueue.get(guildId);
+        if (!queue) {
+            return { tracks: [], loop: false, volume: 100, voiceChannel: null, textChannel: null };
+        }
+        return queue;
+    } catch (error) {
+        console.error('Ошибка при получении очереди:', error);
+        return { tracks: [], loop: false, volume: 100, voiceChannel: null, textChannel: null };
+    }
 }
 
 // Пропуск трека
 async function skipTrack(guildId) {
-    const queue = musicQueue.get(guildId);
-
-    if (!queue || !queue.tracks.length) {
-        return { success: false, message: 'Очередь пуста!' };
-    }
-
+    console.log(`[Lavalink] Попытка пропустить трек для гильдии ${guildId}`);
+    const startTime = Date.now();
     try {
-        // Удаляем первый трек из очереди
-        const skippedTrack = queue.tracks.shift();
+        if (!playerManager) {
+            console.error('PlayerManager не инициализирован');
+            return { success: false, message: 'Система воспроизведения не готова.' };
+        }
+
+        const queue = musicQueue.get(guildId);
+        if (!queue || !queue.tracks.length) {
+            return { success: false, message: 'Очередь пуста!' };
+        }
+
+        const player = playerManager.getPlayer(guildId);
+        if (player) {
+            try {
+                // Останавливаем текущий трек, что приведет к воспроизведению следующего
+                await player.stop();
+            } catch (playerError) {
+                console.error('Ошибка при остановке плеера:', playerError);
+                // Продолжаем выполнение, даже если возникла ошибка с плеером
+            }
+        }
 
         // Возвращаем результат
         if (queue.tracks.length > 0) {
-            return { 
-                success: true, 
-                track: skippedTrack, 
-                message: `Пропущен трек: **${skippedTrack.title}**` 
+            const skippedTrack = queue.tracks[0]; // Трек, который был пропущен
+            return {
+                success: true,
+                track: skippedTrack,
+                message: `Пропущен трек: **${skippedTrack.info.title}**`
             };
         } else {
             // Если в очереди больше нет треков
             musicQueue.delete(guildId);
 
-            return { 
-                success: true, 
-                track: skippedTrack, 
-                message: `Пропущен трек: **${skippedTrack.title}**\nВоспроизведение остановлено.` 
+            return {
+                success: true,
+                track: null,
+                message: 'Воспроизведение остановлено.'
             };
         }
     } catch (error) {
-        console.error('Ошибка при пропуске трека:', error);
-        return { success: false, message: 'Произошла ошибка при попытке пропустить трек!' };
+        console.error('Критическая ошибка при пропуске трека:', error);
+        const duration = Date.now() - startTime;
+        console.log(`[Lavalink] Ошибка пропуска трека завершена за ${duration}мс`);
+        return { success: false, message: 'Произошла критическая ошибка при попытке пропустить трек!' };
     }
+    const duration = Date.now() - startTime;
+    console.log(`[Lavalink] Пропуск трека завершен за ${duration}мс`);
 }
 
 // Остановка воспроизведения
 async function stop(guildId) {
-    const queue = musicQueue.get(guildId);
-
-    if (!queue) {
-        return { success: false, message: 'Нет активной очереди!' };
-    }
-
+    console.log(`[Lavalink] Попытка остановить воспроизведение для гильдии ${guildId}`);
+    const startTime = Date.now();
     try {
-        // Очищаем очередь
-        queue.tracks = [];
+        if (!playerManager) {
+            console.error('PlayerManager не инициализирован');
+            return { success: false, message: 'Система воспроизведения не готова.' };
+        }
 
-        // Удаляем очередь из хранилища
+        const queue = musicQueue.get(guildId);
+        if (!queue) {
+            return { success: false, message: 'Нет активной очереди!' };
+        }
+
+        const player = playerManager.getPlayer(guildId);
+        if (player) {
+            try {
+                // Останавливаем воспроизведение
+                await player.stop();
+                // Отключаемся от голосового канала
+                await player.disconnect();
+                // Уничтожаем плеер
+                playerManager.destroyPlayer(guildId);
+            } catch (playerError) {
+                console.error('Ошибка при остановке плеера:', playerError);
+                // Продолжаем выполнение, даже если произошла ошибка с плеером
+            }
+        }
+
+        // Очищаем очередь
         musicQueue.delete(guildId);
 
         return { success: true, message: 'Воспроизведение остановлено и очередь очищена!' };
     } catch (error) {
-        console.error('Ошибка при остановке воспроизведения:', error);
-        return { success: false, message: 'Произошла ошибка при попытке остановить воспроизведение!' };
+        console.error('Критическая ошибка при остановке воспроизведения:', error);
+        // Удаляем очередь в любом случае, чтобы избежать проблем
+        musicQueue.delete(guildId);
+        const duration = Date.now() - startTime;
+        console.log(`[Lavalink] Ошибка остановки воспроизведения завершена за ${duration}мс`);
+        return { success: false, message: 'Произошла критическая ошибка при остановке воспроизведения!' };
     }
+    const duration = Date.now() - startTime;
+    console.log(`[Lavalink] Остановка воспроизведения завершена за ${duration}мс`);
 }
 
 // Пауза
 async function pause(guildId) {
+    console.log(`[Lavalink] Попытка поставить на паузу воспроизведение для гильдии ${guildId}`);
+    const startTime = Date.now();
     try {
+        if (!playerManager) {
+            console.error('PlayerManager не инициализирован');
+            return { success: false, message: 'Система воспроизведения не готова.' };
+        }
+
         const player = playerManager.getPlayer(guildId);
-        if (player) {
-            await player.pause(true);
-            return { success: true, message: 'Воспроизведение приостановлено!' };
-        } else {
+        if (!player) {
             return { success: false, message: 'Нет активного плеера!' };
         }
+
+        await player.pause(true);
+        return { success: true, message: 'Воспроизведение приостановлено!' };
     } catch (error) {
         console.error('Ошибка при паузе:', error);
+        const duration = Date.now() - startTime;
+        console.log(`[Lavalink] Ошибка паузы завершена за ${duration}мс`);
         return { success: false, message: 'Произошла ошибка при попытке приостановить воспроизведение!' };
     }
+    const duration = Date.now() - startTime;
+    console.log(`[Lavalink] Пауза завершена за ${duration}мс`);
 }
 
 // Возобновление
 async function resume(guildId) {
+    console.log(`[Lavalink] Попытка возобновить воспроизведение для гильдии ${guildId}`);
+    const startTime = Date.now();
     try {
+        if (!playerManager) {
+            console.error('PlayerManager не инициализирован');
+            return { success: false, message: 'Система воспроизведения не готова.' };
+        }
+
         const player = playerManager.getPlayer(guildId);
-        if (player) {
-            await player.pause(false);
-            return { success: true, message: 'Воспроизведение возобновлено!' };
-        } else {
+        if (!player) {
             return { success: false, message: 'Нет активного плеера!' };
         }
+
+        await player.pause(false);
+        return { success: true, message: 'Воспроизведение возобновлено!' };
     } catch (error) {
         console.error('Ошибка при возобновлении:', error);
+        const duration = Date.now() - startTime;
+        console.log(`[Lavalink] Ошибка возобновления завершена за ${duration}мс`);
         return { success: false, message: 'Произошла ошибка при попытке возобновить воспроизведение!' };
     }
+    const duration = Date.now() - startTime;
+    console.log(`[Lavalink] Возобновление завершено за ${duration}мс`);
 }
 
 // Изменение громкости
 async function setVolume(guildId, volume) {
-    const queue = musicQueue.get(guildId);
-
-    if (!queue) {
-        return { success: false, message: 'Нет активной очереди!' };
-    }
-
+    console.log(`[Lavalink] Попытка изменить громкость для гильдии ${guildId} на ${volume}%`);
+    const startTime = Date.now();
     try {
+        if (!playerManager) {
+            console.error('PlayerManager не инициализирован');
+            return { success: false, message: 'Система воспроизведения не готова.' };
+        }
+
+        const queue = musicQueue.get(guildId);
+        if (!queue) {
+            return { success: false, message: 'Нет активной очереди!' };
+        }
+
         // Ограничиваем громкость диапазоном 0-150
         const volumeLevel = Math.min(150, Math.max(0, volume));
 
         const player = playerManager.getPlayer(guildId);
         if (player) {
-            await player.setVolume(volumeLevel);
+            try {
+                await player.setVolume(volumeLevel);
+            } catch (playerError) {
+                console.error('Ошибка при изменении громкости плеера:', playerError);
+                // Продолжаем выполнение, даже если возникла ошибка с плеером
+            }
         }
+
         queue.volume = volumeLevel;
         musicQueue.set(guildId, queue);
 
         return { success: true, message: `Громкость установлена на ${volumeLevel}%` };
     } catch (error) {
-        console.error('Ошибка при изменении громкости:', error);
-        return { success: false, message: 'Произошла ошибка при попытке изменить громкость!' };
+        console.error('Критическая ошибка при изменении громкости:', error);
+        const duration = Date.now() - startTime;
+        console.log(`[Lavalink] Ошибка изменения громкости завершена за ${duration}мс`);
+        return { success: false, message: 'Произошла критическая ошибка при попытке изменить громкость!' };
     }
+    const duration = Date.now() - startTime;
+    console.log(`[Lavalink] Изменение громкости завершено за ${duration}мс`);
 }
 
 // Переключение режима loop
 function toggleLoop(guildId) {
-    const queue = musicQueue.get(guildId);
+    try {
+        const queue = musicQueue.get(guildId);
 
-    if (!queue) {
-        return { success: false, message: 'Нет активной очереди!' };
+        if (!queue) {
+            return { success: false, message: 'Нет активной очереди!' };
+        }
+
+        queue.loop = !queue.loop;
+        musicQueue.set(guildId, queue);
+
+        return {
+            success: true,
+            message: `Режим повтора ${queue.loop ? 'включен' : 'выключен'}!`
+        };
+    } catch (error) {
+        console.error('Ошибка при переключении режима loop:', error);
+        return { success: false, message: 'Произошла ошибка при переключении режима повтора!' };
     }
-
-    queue.loop = !queue.loop;
-    musicQueue.set(guildId, queue);
-
-    return {
-        success: true,
-        message: `Режим повтора ${queue.loop ? 'включен' : 'выключен'}!`
-    };
 }
 
 module.exports = {

@@ -1,6 +1,18 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getQueue } = require('../System/Audio/lavalinkSystem');
 
+// Функция форматирования времени
+function formatTime(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+        return `${hours}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('queue')
@@ -27,7 +39,8 @@ module.exports = {
         for (let i = 0; i < tracksToShow.length; i++) {
             const track = tracksToShow[i];
             const position = i === 0 ? '🎵 Сейчас играет:' : `${i + 1}.`;
-            queueDescription += `${position} [${track.title}](${track.uri})\n`;
+            // В новой системе у трека есть свойство info
+            queueDescription += `${position} [${track.info.title}](${track.info.uri}) - ${track.info.author} (${formatTime(track.info.length)})\n`;
         }
         
         if (queue.tracks.length > 10) {
@@ -37,6 +50,10 @@ module.exports = {
         const embed = new EmbedBuilder()
             .setTitle(`🎵 Очередь воспроизведения (${queue.tracks.length} треков)`)
             .setDescription(queueDescription)
+            .addFields(
+                { name: 'Режим повтора', value: queue.loop ? '🔁 Включен' : '🔁 Выключен', inline: true },
+                { name: 'Громкость', value: `🔊 ${queue.volume}%`, inline: true }
+            )
             .setColor('#8b00ff')
             .setTimestamp();
         
