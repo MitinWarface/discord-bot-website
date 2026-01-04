@@ -226,20 +226,20 @@ npm run dev
 5. Укажите `dashboard/server.js` как основной файл для сервера
 
 6. Добавьте необходимые секреты (замените <your-values> на реальные значения):
-   ```bash
-   # Создать секреты
-   vercel secrets add discord_token <your-discord-token>
-   vercel secrets add discord_client_id <your-discord-client-id>
-   vercel secrets add discord_client_secret <your-discord-client-secret>
-   vercel secrets add guild_id <your-guild-id>
-   vercel secrets add session_secret <your-session-secret>
-   vercel secrets add base_url <your-base-url>
-   vercel secrets add youtube_token <your-youtube-token>
-   vercel secrets add openweather_api_key <your-openweather-api-key>
-   vercel secrets add lavalink_host <your-lavalink-host>
-   vercel secrets add lavalink_port <your-lavalink-port>
-   vercel secrets add lavalink_password <your-lavalink-password>
-   ```
+  ```bash
+  # Создать секреты
+  vercel secrets add discord_token <your-discord-token>
+  vercel secrets add discord_client_id <your-discord-client-id>
+  vercel secrets add discord_client_secret <your-discord-client-secret>
+  vercel secrets add guild_id <your-guild-id>
+  vercel secrets add session_secret <your-session-secret>
+  vercel secrets add base_url <your-base-url>
+  vercel secrets add youtube_token <your-youtube-token>
+  vercel secrets add openweather_api_key <your-openweather-api-key>
+  vercel secrets add lavalink_host <your-lavalink-host>
+  vercel secrets add lavalink_port <your-lavalink-port>
+  vercel secrets add lavalink_password <your-lavalink-password>
+  ```
 
 7. Свяжите секреты с переменными окружения проекта:
    ```bash
