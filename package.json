@@ -5,11 +5,12 @@
   "main": "index.js",
   "scripts": {
       "start": "node index.js",
-      "dev": "node index.js",
+      "dev": "nodemon index.js",
       "dashboard": "node dashboard/server.js",
       "both": "concurrently \"node index.js\" \"node dashboard/server.js\"",
       "check": "node check-config.js",
-      "vercel-setup": "node scripts/vercel-setup.js"
+      "vercel-setup": "node scripts/vercel-setup.js",
+      "replit": "node index.js & node dashboard/server.js"
   },
   "keywords": [
     "discord",

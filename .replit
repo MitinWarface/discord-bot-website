@@ -1,5 +1,5 @@
 language = "javascript"
 
 [run]
-command = "npm start"
+command = "npm run replit"
 runInTerminal = true
