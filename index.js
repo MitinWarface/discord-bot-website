@@ -1,10 +1,10 @@
-const { Client, Events, GatewayIntentBits, Collection, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Collection, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent } = require('discord.js');
 const dotenv = require('dotenv');
 dotenv.config(); // Загружаем переменные окружения из .env файла
 
 const fs = require('fs');
 const path = require('path');
-const { updateUserProfile, getUserProfile, getTopUsers, canClaimDaily, claimDaily } = require('./System/userProfiles');
+const { updateUserProfile, getUserProfile, getTopUsers, canClaimDaily, claimDaily } = require('./System/userProfiles.js');
 const shopItems = require('./shopItems');
 const NotificationSystem = require('./System/notificationSystem');
 const { getUpcomingEvents, cleanupPastEvents } = require('./System/eventSystem');
@@ -19,6 +19,7 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent, // Для обработки префиксных команд
+        GatewayIntentBits.GuildMembers, // Для получения информации о пользователях
         // GatewayIntentBits.GuildVoiceStates // Для обработки голосовых состояний
     ],
 });
@@ -1805,6 +1806,266 @@ client.on(Events.MessageCreate, async message => {
             }
         } catch (moderationError) {
             console.error('Ошибка при проверке автомодерации:', moderationError);
+        }
+
+        // Обработка логирования сообщений (удаление, изменение)
+        try {
+            const loggingSystem = require('./System/loggingSystem');
+            const config = loggingSystem.getGuildLoggingConfig(message.guild.id);
+            
+            // Проверяем, включено ли логирование для этого события
+            if (config.events.messageDelete || config.events.messageUpdate) {
+                // Обработчик удаления сообщения
+                const handleMessageDelete = async (deletedMessage) => {
+                    if (deletedMessage.author.bot) return; // Игнорируем сообщения от ботов
+                    
+                    // Проверяем, включено ли логирование удаления сообщений
+                    if (config.events.messageDelete) {
+                        const logData = {
+                            author: deletedMessage.author,
+                            channel: deletedMessage.channel,
+                            content: deletedMessage.content,
+                            guild: deletedMessage.guild
+                        };
+                        
+                        await loggingSystem.sendLog(message.guild, 'messageDelete', logData);
+                    }
+                };
+                
+                // Обработчик изменения сообщения
+                const handleMessageUpdate = async (oldMessage, newMessage) => {
+                    if (newMessage.author.bot) return; // Игнорируем сообщения от ботов
+                    
+                    // Проверяем, включено ли логирование изменения сообщений
+                    if (config.events.messageUpdate && oldMessage.content !== newMessage.content) {
+                        const logData = {
+                            author: newMessage.author,
+                            channel: newMessage.channel,
+                            oldContent: oldMessage.content,
+                            newContent: newMessage.content,
+                            guild: newMessage.guild
+                        };
+                        
+                        await loggingSystem.sendLog(message.guild, 'messageUpdate', logData);
+                    }
+                };
+                
+                // Добавляем обработчики клиенту, а не к гильдии
+                client.on('messageDelete', handleMessageDelete);
+                client.on('messageUpdate', handleMessageUpdate);
+            }
+        } catch (loggingError) {
+            console.error('Ошибка при настройке логирования:', loggingError);
+        }
+
+        // Обработка системы уровней
+        try {
+            const guildSettingsModule = require('./System/guildSettings');
+            const guildSettings = guildSettingsModule.getGuildSettings(message.guild.id);
+            
+            if (guildSettings.leveling.enabled) {
+                // Проверяем кулдаун на получение XP
+                const userProfiles = require('./System/userProfiles.js');
+                const userProfile = userProfiles.getUserProfile(message.author.id);
+                const lastMessageTime = userProfile.lastXpGain || 0;
+                const currentTime = Date.now();
+                
+                // Проверяем, прошло ли достаточно времени с последнего получения XP
+                if (currentTime - lastMessageTime >= guildSettings.leveling.xpCooldownMs) {
+                    // Вычисляем количество XP за сообщение (случайное значение в диапазоне)
+                    const xpToAdd = Math.floor(Math.random() * (guildSettings.leveling.xpPerMessageMax - guildSettings.leveling.xpPerMessageMin + 1)) + guildSettings.leveling.xpPerMessageMin;
+                    
+                    // Обновляем профиль пользователя с учетом полученного XP
+                    userProfiles.updateUserProfile(message.author.id, {
+                        points: userProfile.points + xpToAdd,
+                        lastXpGain: currentTime
+                    });
+                    
+                    // Проверяем, повысился ли уровень
+                    const newLevel = Math.floor((userProfile.points + xpToAdd) / 10) + 1;
+                    const levelUp = newLevel > userProfile.level;
+                    
+                    if (levelUp) {
+                        // Отправляем уведомление пользователю о повышении уровня
+                        notificationSystem.sendLevelUpNotification(message.author.id, newLevel)
+                            .catch(error => {
+                                console.error('Ошибка при отправке уведомления о повышении уровня:', error);
+                            });
+                    }
+                }
+            }
+        } catch (levelingError) {
+            console.error('Ошибка при обработке системы уровней:', levelingError);
+        }
+
+        // Обработка экономической системы
+        try {
+            const guildSettingsModule = require('./System/guildSettings');
+            const guildSettings = guildSettingsModule.getGuildSettings(message.guild.id);
+            
+            // Проверяем, включена ли экономическая система
+            if (guildSettings.economy.enabled) {
+                // Обновляем прогресс квестов на отправку сообщений
+                try {
+                    require('./System/userProfiles').updateQuestProgressByType(message.author.id, 'message', 1);
+                } catch (error) {
+                    console.error('Ошибка при обновлении прогресса квеста на сообщения:', error);
+                }
+            }
+        } catch (economyError) {
+            console.error('Ошибка при обработке экономической системы:', economyError);
+        }
+
+        // Обработка системы авторолей
+        try {
+            const guildSettingsModule = require('./System/guildSettings');
+            const guildSettings = guildSettingsModule.getGuildSettings(message.guild.id);
+            
+            // Обработка событий участников (автовороли при присоединении)
+            if (guildSettings.autoroles.enabled && guildSettings.autoroles.roleId) {
+                // Обработчик события присоединения участника
+                client.on('guildMemberAdd', async (member) => {
+                    if (member.guild.id !== message.guild.id) return; // Проверяем, что это тот же сервер
+                    
+                    const role = member.guild.roles.cache.get(guildSettings.autoroles.roleId);
+                    if (role) {
+                        try {
+                            await member.roles.add(role);
+                            console.log(`Выдана роль ${role.name} участнику ${member.user.tag}`);
+                        } catch (error) {
+                            console.error('Ошибка при выдаче автовороли:', error);
+                        }
+                    }
+                });
+            }
+        } catch (autoroleError) {
+            console.error('Ошибка при обработке автоворолей:', autoroleError);
+        }
+        
+        // Проверяем автоматическую модерацию
+        try {
+            const guildSettingsModule = require('./System/guildSettings');
+            const guildSettings = guildSettingsModule.getGuildSettings(message.guild.id);
+            
+            // Если автомодерация включена
+            if (guildSettings.automod.enabled) {
+                // Проверяем содержимое сообщения
+                const { checkMessageContent, checkSpam, applyModerationAction } = require('./System/moderationSystem');
+                const checkResult = checkMessageContent(message, guildSettings);
+                
+                // Проверяем спам
+                const isSpam = checkSpam(message.author.id, message);
+                if (isSpam) {
+                    checkResult.spam = true;
+                    checkResult.severity += 2;
+                }
+                
+                // Если обнаружены нарушения
+                if (checkResult.severity > 0) {
+                    // Определяем действие на основе количества предупреждений пользователя
+                    const { getUserProfile } = require('./System/userProfiles');
+                    const user = getUserProfile(message.author.id);
+                    const warnings = user.warnings || 0;
+                    
+                    let action = null;
+                    if (warnings >= guildSettings.automod.actions.ban) {
+                        action = 'ban';
+                    } else if (warnings >= guildSettings.automod.actions.kick) {
+                        action = 'kick';
+                    } else if (warnings >= guildSettings.automod.actions.mute) {
+                        action = 'mute';
+                    } else if (warnings >= guildSettings.automod.actions.warn) {
+                        action = 'warn';
+                    }
+                    
+                    if (action) {
+                        // Удаляем сообщение
+                        await message.delete().catch(() => {});
+                        
+                        // Применяем действие
+                        let reason = 'Нарушение правил сервера';
+                        if (checkResult.profanity) reason = 'Использование ненормативной лексики';
+                        if (checkResult.links) reason = 'Отправка запрещенных ссылок';
+                        if (checkResult.spam) reason = 'Спам';
+                        if (checkResult.caps) reason = 'Использование капса';
+                        if (checkResult.invites) reason = 'Отправка приглашений на другие серверы';
+                        
+                        await applyModerationAction(message, action, reason, checkResult.severity);
+                    } else {
+                        // Просто удаляем сообщение если не достигнут порог предупреждений
+                        await message.delete().catch(() => {});
+                        
+                        // Отправляем пользователю предупреждение
+                        try {
+                            const warningEmbed = new EmbedBuilder()
+                                .setTitle('⚠️ Предупреждение')
+                                .setDescription(`Ваше сообщение на сервере **${message.guild.name}** было удалено за нарушение правил`)
+                                .addFields(
+                                    { name: 'Причина', value: checkResult.profanity ? 'Ненормативная лексика' :
+                                        checkResult.links ? 'Запрещенная ссылка' :
+                                        checkResult.spam ? 'Спам' :
+                                        checkResult.caps ? 'Капс' :
+                                        checkResult.invites ? 'Приглашение на другой сервер' : 'Нарушение правил', inline: true }
+                                )
+                                .setColor('#FFA50')
+                                .setTimestamp();
+                            
+                            await message.author.send({ embeds: [warningEmbed] });
+                        } catch (error) {
+                            // Не удалось отправить личное сообщение
+                            console.log(`Не удалось отправить предупреждение пользователю ${message.author.id}`);
+                        }
+                    }
+                }
+            }
+        } catch (moderationError) {
+            console.error('Ошибка при проверке автомодерации:', moderationError);
+        }
+        
+        // Логирование сообщений (удаление изменение)
+        try {
+            const loggingSystem = require('./System/loggingSystem');
+            const config = loggingSystem.getGuildLoggingConfig(message.guild.id);
+            
+            // Проверяем, включено ли логирование для этого события
+            if (config.events.messageDelete || config.events.messageUpdate) {
+                // Добавляем обработчик удаления сообщения
+                client.on('messageDelete', async (deletedMessage) => {
+                    if (deletedMessage.author.bot) return; // Игнорируем сообщения от ботов
+                    
+                    // Проверяем, включено ли логирование удаления сообщений
+                    if (config.events.messageDelete) {
+                        const logData = {
+                            author: deletedMessage.author,
+                            channel: deletedMessage.channel,
+                            content: deletedMessage.content,
+                            guild: deletedMessage.guild
+                        };
+                        
+                        await loggingSystem.sendLog(message.guild, 'messageDelete', logData);
+                    }
+                });
+                
+                // Добавляем обработчик изменения сообщения
+                client.on('messageUpdate', async (oldMessage, newMessage) => {
+                    if (newMessage.author.bot) return; // Игнорируем сообщения от ботов
+                    
+                    // Проверяем, включено ли логирование изменения сообщений
+                    if (config.events.messageUpdate && oldMessage.content !== newMessage.content) {
+                        const logData = {
+                            author: newMessage.author,
+                            channel: newMessage.channel,
+                            oldContent: oldMessage.content,
+                            newContent: newMessage.content,
+                            guild: newMessage.guild
+                        };
+                        
+                        await loggingSystem.sendLog(message.guild, 'messageUpdate', logData);
+                    }
+                });
+            }
+        } catch (loggingError) {
+            console.error('Ошибка при настройке логирования:', loggingError);
         }
 });
 

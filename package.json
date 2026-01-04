@@ -4,11 +4,11 @@
   "description": "Discord бот",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js",
-    "dashboard": "node dashboard/server.js",
-    "both": "concurrently \"npm run start\" \"npm run dashboard\"",
-    "check": "node check-config.js"
+      "start": "node index.js",
+      "dev": "node index.js",
+      "dashboard": "node dashboard/server.js",
+      "both": "concurrently \"node index.js\" \"node dashboard/server.js\"",
+      "check": "node check-config.js"
   },
   "keywords": [
     "discord",

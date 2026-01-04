@@ -60,6 +60,12 @@ function getGuildSettings(guildId) {
             dailyAmount: 100,
             workEnabled: true
         },
+        work: {
+            enabled: true,
+            minReward: 50,
+            maxReward: 150,
+            cooldownHours: 12
+        },
         logging: {
             enabled: false,
             logChannel: null,
@@ -84,6 +90,22 @@ function getGuildSettings(guildId) {
         events: {
             enabled: true,
             announcementChannel: null
+        },
+        music: {
+            enabled: true,
+            maxQueueSize: 50,
+            maxTrackDuration: 600, // 10 минут
+            audioQuality: 2,
+            maxRetryAttempts: 3,
+            streamTimeout: 30000
+        },
+        reactions: {
+            enabled: true,
+            reactionRoles: {}
+        },
+        autoroles: {
+            enabled: false,
+            roleId: null
         }
     };
 

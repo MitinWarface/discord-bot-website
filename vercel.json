@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "dashboard/server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "dashboard/server.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "DISCORD_TOKEN": "@discord_token",
+    "DISCORD_CLIENT_ID": "@discord_client_id",
+    "DISCORD_CLIENT_SECRET": "@discord_client_secret",
+    "BASE_URL": "@base_url",
+    "SESSION_SECRET": "@session_secret",
+    "GUILD_ID": "@guild_id",
+    "YOUTUBE_TOKEN": "@youtube_token",
+    "OPENWEATHER_API_KEY": "@openweather_api_key",
+    "LAVALINK_HOST": "@lavalink_host",
+    "LAVALINK_PORT": "@lavalink_port",
+    "LAVALINK_PASSWORD": "@lavalink_password"
+  }
+}

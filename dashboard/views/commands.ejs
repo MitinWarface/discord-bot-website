@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Команды | Aurora Bot Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 10%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b00ff 0%, #4a00e0 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .commands-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .commands-section h2 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .category {
+            margin-bottom: 30px;
+        }
+
+        .category h3 {
+            font-size: 22px;
+            margin-bottom: 15px;
+            color: #8b00ff;
+            border-bottom: 2px solid #8b00ff;
+            padding-bottom: 5px;
+        }
+
+        .command-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .command {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .command .name {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #7289DA;
+        }
+
+        .command .description {
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .command .usage {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="user-info">
+            <div class="avatar">👤</div>
+            <div>
+                <h3><%= user.username %></h3>
+                <p>ID: <%= user.id %></p>
+            </div>
+        </div>
+        <div class="nav">
+            <a href="/">Главная</a>
+            <a href="/servers">Серверы</a>
+            <a href="/info">О боте</a>
+            <a href="/auth/logout">Выход</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="commands-section">
+            <h2>Команды Aurora Bot</h2>
+            
+            <div class="category">
+                <h3>🎵 Музыка</h3>
+                <div class="command-list">
+                    <div class="command">
+                        <div class="name">/play</div>
+                        <div class="description">Воспроизвести музыку из YouTube</div>
+                        <div class="usage">/play <название или URL></div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/pause</div>
+                        <div class="description">Приостановить воспроизведение</div>
+                        <div class="usage">/pause</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/skip</div>
+                        <div class="description">Пропустить текущую песню</div>
+                        <div class="usage">/skip</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/queue</div>
+                        <div class="description">Показать очередь воспроизведения</div>
+                        <div class="usage">/queue</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="category">
+                <h3>📊 Уровни и XP</h3>
+                <div class="command-list">
+                    <div class="command">
+                        <div class="name">/profile</div>
+                        <div class="description">Показать ваш профиль и уровень</div>
+                        <div class="usage">/profile [пользователь]</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/leaderboard</div>
+                        <div class="description">Показать таблицу лидеров</div>
+                        <div class="usage">/leaderboard</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/rank</div>
+                        <div class="description">Показать ваш ранг на сервере</div>
+                        <div class="usage">/rank [пользователь]</div>
+                    </div>
+                </div>
+            
+            <div class="category">
+                <h3>💰 Экономика</h3>
+                <div class="command-list">
+                    <div class="command">
+                        <div class="name">/balance</div>
+                        <div class="description">Проверить ваш баланс</div>
+                        <div class="usage">/balance [пользователь]</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/daily</div>
+                        <div class="description">Получить ежедневную награду</div>
+                        <div class="usage">/daily</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/work</div>
+                        <div class="description">Поработать и заработать монеты</div>
+                        <div class="usage">/work</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/shop</div>
+                        <div class="description">Открыть магазин</div>
+                        <div class="usage">/shop</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="category">
+                <h3>🛡️ Модерация</h3>
+                <div class="command-list">
+                    <div class="command">
+                        <div class="name">/ban</div>
+                        <div class="description">Заблокировать пользователя</div>
+                        <div class="usage">/ban <пользователь> [причина]</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/kick</div>
+                        <div class="description">Выгнать пользователя</div>
+                        <div class="usage">/kick <пользователь> [причина]</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/warn</div>
+                        <div class="description">Выдать предупреждение пользователю</div>
+                        <div class="usage">/warn <пользователь> [причина]</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/clear</div>
+                        <div class="description">Очистить сообщения в канале</div>
+                        <div class="usage">/clear <количество></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="category">
+                <h3>🎮 Мини-игры</h3>
+                <div class="command-list">
+                    <div class="command">
+                        <div class="name">/trivia</div>
+                        <div class="description">Начать викторину</div>
+                        <div class="usage">/trivia</div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/guess</div>
+                        <div class="description">Игра "Угадай число"</div>
+                        <div class="usage">/guess <число></div>
+                    </div>
+                    <div class="command">
+                        <div class="name">/rps</div>
+                        <div class="description">Игра "Камень, ножницы, бумага"</div>
+                        <div class="usage">/rps <камень/ножницы/бумага></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
