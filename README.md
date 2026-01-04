@@ -25,15 +25,15 @@ SESSION_SECRET=любой_секретный_ключ
 PORT=3000
 ```
 
-4. Убедитесь, что в файле `replit.nix` указана актуальная версия Node.js:
+4. Убедитесь, что в файле `replit.nix` указана поддерживаемая версия Node.js:
 
 ```
 { pkgs }: {
   deps = [
-    pkgs.nodejs-18_x
+    pkgs.nodejs-16_x
     pkgs.nodePackages.npm
     pkgs.replitPackages.jest
-  ];
+ ];
 }
 ```
 
