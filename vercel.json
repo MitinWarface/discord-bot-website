@@ -1,4 +1,4 @@
-{
+ {
   "version": 2,
   "builds": [
     {
@@ -10,10 +10,6 @@
     }
   ],
   "routes": [
-    {
-      "src": "/api/bot/(.*)",
-      "dest": "/api/bot.js"
-    },
     {
       "src": "/(.*)",
       "dest": "dashboard/server.js"
