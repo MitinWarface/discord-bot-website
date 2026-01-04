@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Серверы | Aurora Bot Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 10%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b00ff 0%, #4a00e0 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .page-title {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .page-title h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .page-title p {
+            font-size: 18px;
+            opacity: 0.8;
+        }
+
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+
+        .server-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .server-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .server-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .server-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #8b00ff 0%, #4a00e0 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        .server-info h3 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .server-info p {
+            opacity: 0.7;
+            font-size: 14px;
+        }
+
+        .server-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .stat .value {
+            font-size: 20px;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat .label {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .server-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #7289DA;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #677bc4;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="user-info">
+            <div class="avatar">👤</div>
+            <div>
+                <h3><%= user.username %></h3>
+                <p>ID: <%= user.id %></p>
+            </div>
+        <div class="nav">
+            <a href="/">Главная</a>
+            <a href="/auth/logout">Выход</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="page-title">
+            <h1>Ваши сервера</h1>
+            <p>Управляйте настройками Aurora Bot на ваших Discord серверах</p>
+        </div>
+
+        <div class="servers-grid">
+            <% if (servers && servers.length > 0) { %>
+                <% servers.forEach(function(server) { %>
+                    <div class="server-card">
+                        <div class="server-header">
+                            <div class="server-icon">🏰</div>
+                            <div class="server-info">
+                                <h3><%= server.name %></h3>
+                                <p>ID: <%= server.id %></p>
+                            </div>
+                        </div>
+                        
+                        <div class="server-stats">
+                            <div class="stat">
+                                <span class="value"><%= server.memberCount || 'N/A' %></span>
+                                <span class="label">Участники</span>
+                            </div>
+                            <div class="stat">
+                                <span class="value"><%= server.channels || 'N/A' %></span>
+                                <span class="label">Каналы</span>
+                            </div>
+                        </div>
+
+                        <div class="server-actions">
+                            <a href="/server/<%= server.id %>" class="btn btn-primary">Управление</a>
+                            <a href="https://discord.com/channels/<%= server.id %>" class="btn btn-secondary" target="_blank">Открыть</a>
+                        </div>
+                    </div>
+                <% }); %>
+            <% } else { %>
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <h2>Нет доступных серверов</h2>
+                    <p style="margin-top: 10px; opacity: 0.7;">У вас нет серверов, на которых вы являетесь администратором</p>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>
