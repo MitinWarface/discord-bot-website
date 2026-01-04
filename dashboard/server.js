@@ -3,6 +3,8 @@ const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config(); // Загружаем переменные окружения из .env файла
 
 // Инициализация Express приложения
 const app = express();
