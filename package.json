@@ -8,7 +8,8 @@
       "dev": "node index.js",
       "dashboard": "node dashboard/server.js",
       "both": "concurrently \"node index.js\" \"node dashboard/server.js\"",
-      "check": "node check-config.js"
+      "check": "node check-config.js",
+      "vercel-setup": "node scripts/vercel-setup.js"
   },
   "keywords": [
     "discord",

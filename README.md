@@ -225,23 +225,29 @@ npm run dev
 4. Следуйте инструкциям в терминале для настройки проекта
 5. Укажите `dashboard/server.js` как основной файл для сервера
 
-6. Добавьте необходимые секреты (замените <your-values> на реальные значения):
-  ```bash
-  # Создать секреты
-  vercel secrets add discord_token <your-discord-token>
-  vercel secrets add discord_client_id <your-discord-client-id>
-  vercel secrets add discord_client_secret <your-discord-client-secret>
-  vercel secrets add guild_id <your-guild-id>
-  vercel secrets add session_secret <your-session-secret>
-  vercel secrets add base_url <your-base-url>
-  vercel secrets add youtube_token <your-youtube-token>
-  vercel secrets add openweather_api_key <your-openweather-api-key>
-  vercel secrets add lavalink_host <your-lavalink-host>
-  vercel secrets add lavalink_port <your-lavalink-port>
-  vercel secrets add lavalink_password <your-lavalink-password>
-  ```
+6. Автоматическая настройка переменных окружения (рекомендуется):
+   ```bash
+   npm run vercel-setup
+   ```
+   Этот скрипт автоматически прочитает ваши переменные из файла `.env` и создаст соответствующие секреты в Vercel, а затем свяжет их с переменными окружения для сред preview и production.
 
-7. Свяжите секреты с переменными окружения проекта:
+7. Или вручную добавьте необходимые секреты (замените <your-values> на реальные значения):
+   ```bash
+   # Создать секреты
+   vercel secrets add discord_token <your-discord-token>
+   vercel secrets add discord_client_id <your-discord-client-id>
+   vercel secrets add discord_client_secret <your-discord-client-secret>
+   vercel secrets add guild_id <your-guild-id>
+   vercel secrets add session_secret <your-session-secret>
+   vercel secrets add base_url <your-base-url>
+   vercel secrets add youtube_token <your-youtube-token>
+   vercel secrets add openweather_api_key <your-openweather-api-key>
+   vercel secrets add lavalink_host <your-lavalink-host>
+   vercel secrets add lavalink_port <your-lavalink-port>
+   vercel secrets add lavalink_password <your-lavalink-password>
+   ```
+
+8. Если вы настраивали переменные вручную, свяжите секреты с переменными окружения проекта:
    ```bash
    # Связывание секретов с переменными окружения для всех сред (development, preview, production)
    vercel env add DISCORD_TOKEN preview
@@ -278,7 +284,7 @@ npm run dev
    vercel env add LAVALINK_PASSWORD production
    ```
 
-8. Выполните деплой проекта:
+9. Выполните деплой проекта:
    ```bash
    vercel --prod
    ```
