@@ -226,12 +226,12 @@
                         
                         <div class="server-stats">
                             <div class="stat">
-                                <span class="value"><%= server.memberCount || 'N/A' %></span>
+                                <span class="value"><%= server.approximate_member_count || server.memberCount || 'N/A' %></span>
                                 <span class="label">Участники</span>
                             </div>
                             <div class="stat">
-                                <span class="value"><%= server.channels || 'N/A' %></span>
-                                <span class="label">Каналы</span>
+                                <span class="value"><%= server.approximate_presence_count || server.channels || 'N/A' %></span>
+                                <span class="label">Онлайн</span>
                             </div>
                         </div>
 

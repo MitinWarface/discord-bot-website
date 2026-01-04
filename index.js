@@ -870,7 +870,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 
                 case 'aurora_rep':
                     // Открываем меню репутации
-                    const { getUserProfile: getRepUserProfile } = require('./userProfiles');
+                    const { getUserProfile: getRepUserProfile, getReputation, canGiveReputation } = require('./System/userProfiles');
                     
                     const repUserProfile = getRepUserProfile(interaction.user.id);
                     const userRep = getReputation(interaction.user.id);
@@ -1584,199 +1584,228 @@ client.on(Events.MessageCreate, async message => {
     console.log(`Получено сообщение: ${message.content} от ${message.author.username}`);
     
     // Проверяем, начинается ли сообщение с префикса *
-    if (message.content.startsWith('*')) {
-        const args = message.content.slice(1).trim().split(/ +/);
-        const command = args.shift()?.toLowerCase();
-        
-        if (command === 'aurora') {
-            // Вызываем команду aurora
-            const auroraCommand = require('./commands/aurora.js');
+        if (message.content.startsWith('*')) {
+            const args = message.content.slice(1).trim().split(/ +/);
+            const command = args.shift()?.toLowerCase();
             
-            // Создаем фальшивое взаимодействие для вызова команды
-            const fakeInteraction = {
-                user: message.author,
-                member: message.member,
-                channel: message.channel,
-                guild: message.guild,
-                commandName: 'aurora',
-                options: {
-                    get: () => {},
-                    getString: () => {},
-                    getInteger: () => {},
-                    getBoolean: () => {},
-                    getUser: () => {},
-                    getChannel: () => {},
-                    getRole: () => {},
-                    getNumber: () => {},
-                    getAttachment: () => {}
-                },
-                reply: async (options) => {
-                    if (options.embeds) {
-                        return await message.reply({ embeds: options.embeds, components: options.components });
-                    } else {
-                        return await message.reply(options.content);
-                    }
-                },
-                deferReply: async () => {},
-                editReply: async (options) => {},
-                followUp: async (options) => {},
-                deleteReply: async () => {},
-                fetchReply: async () => {}
-            };
+            if (command === 'aurora') {
+                // Вызываем команду aurora
+                const auroraCommand = require('./commands/aurora.js');
+                
+                // Создаем фальшивое взаимодействие для вызова команды
+                const fakeInteraction = {
+                    user: message.author,
+                    member: message.member,
+                    channel: message.channel,
+                    guild: message.guild,
+                    commandName: 'aurora',
+                    options: {
+                        get: () => {},
+                        getString: () => {},
+                        getInteger: () => {},
+                        getBoolean: () => {},
+                        getUser: () => {},
+                        getChannel: () => {},
+                        getRole: () => {},
+                        getNumber: () => {},
+                        getAttachment: () => {}
+                    },
+                    reply: async (options) => {
+                        if (options.embeds) {
+                            return await message.reply({ embeds: options.embeds, components: options.components });
+                        } else {
+                            return await message.reply(options.content);
+                        }
+                    },
+                    deferReply: async () => {},
+                    editReply: async (options) => {},
+                    followUp: async (options) => {},
+                    deleteReply: async () => {},
+                    fetchReply: async () => {}
+                };
+                
+                // Вызываем выполнение команды
+                auroraCommand.execute(fakeInteraction).catch(console.error);
+            }
+        } else {
+            // Проверяем, начинается ли сообщение с префикса сервера
+            const guildSettingsModule = require('./System/guildSettings');
+            const guildSettings = guildSettingsModule.getGuildSettings(message.guild.id);
+            const prefix = guildSettings.prefix || '!';
             
-            // Вызываем выполнение команды
-            auroraCommand.execute(fakeInteraction).catch(console.error);
-        }
+            if (message.content.startsWith(prefix)) {
+                const args = message.content.slice(prefix.length).trim().split(/ +/);
+                const command = args.shift()?.toLowerCase();
+                
+                // Обработка команды, если она есть
+                if (command === 'settings') {
+                    // Команда для просмотра настроек сервера
+                    const settingsEmbed = new EmbedBuilder()
+                        .setTitle(`⚙️ Настройки сервера ${message.guild.name}`)
+                        .setDescription(`Текущий префикс: \`${prefix}\``)
+                        .addFields(
+                            { name: 'Автомодерация', value: guildSettings.automod.enabled ? '✅ Включена' : '❌ Выключена', inline: true },
+                            { name: 'Система уровней', value: guildSettings.leveling.enabled ? '✅ Включена' : '❌ Выключена', inline: true },
+                            { name: 'Экономическая система', value: guildSettings.economy.enabled ? '✅ Включена' : '❌ Выключена', inline: true }
+                        )
+                        .setColor('#8b00ff')
+                        .setTimestamp();
+                    
+                    await message.reply({ embeds: [settingsEmbed] });
+                }
+            }
+    
     }
     
-    // Обновляем прогресс квестов на отправку сообщений
-    try {
-        const firstMessageQuestResult = require('./System/userProfiles').updateQuestProgress(message.author.id, 'first_message');
-        const tenMessagesQuestResult = require('./System/userProfiles').updateQuestProgress(message.author.id, 'ten_messages');
-        
-        // Обновляем прогресс квеста на отправку сообщений по типу
+        // Обновляем прогресс квестов на отправку сообщений
         try {
-            require('./System/userProfiles').updateQuestProgressByType(message.author.id, 'message', 1);
-        } catch (error) {
-            console.error('Ошибка при обновлении прогресса квеста на сообщения:', error);
-        }
-        
-        // Если пользователь состоит в гильдии, добавляем опыт гильдии
-        const userGuild = require('./System/guildSystem').getUserGuild(message.author.id);
-        if (userGuild) {
-            require('./System/guildSystem').addGuildExperience(userGuild.id, 0.5); // 0.5 очка опыта за сообщение
-        }
-        
-        // Если квест был завершен, отправляем уведомление
-        if (firstMessageQuestResult && firstMessageQuestResult.completed) {
-            const questCompletedEmbed = new EmbedBuilder()
-                .setTitle('🏆 Квест выполнен!')
-                .setColor('#f1c40f')
-                .setDescription(`Поздравляем! Вы выполнили квест: **${'Первое сообщение'}**`)
-                .addFields(
-                    { name: 'Награда', value: `${firstMessageQuestResult.reward || 0} очков`, inline: true }
-                )
-                .setTimestamp()
-                .setFooter({ text: `Квест завершен`, iconURL: message.author.displayAvatarURL() });
+            const firstMessageQuestResult = require('./System/userProfiles').updateQuestProgress(message.author.id, 'first_message');
+            const tenMessagesQuestResult = require('./System/userProfiles').updateQuestProgress(message.author.id, 'ten_messages');
             
-            // Отправляем уведомление в тот же канал
-            message.reply({ embeds: [questCompletedEmbed], ephemeral: true });
-            
-            // Отправляем уведомление пользователю
-            notificationSystem.sendQuestNotification(message.author.id, {
-                name: 'Первое сообщение',
-                description: 'Отправил первое сообщение',
-                reward: { points: firstMessageQuestResult.reward || 0 },
-                type: 'message'
-            }).catch(error => {
-                console.error('Ошибка при отправке уведомления о квесте:', error);
-            });
-        } else if (tenMessagesQuestResult && tenMessagesQuestResult.completed) {
-            const questCompletedEmbed = new EmbedBuilder()
-                .setTitle('🏆 Квест выполнен!')
-                .setColor('#f1c40f')
-                .setDescription(`Поздравляем! Вы выполнили квест: **${'Активный участник'}**`)
-                .addFields(
-                    { name: 'Награда', value: `${tenMessagesQuestResult.reward || 0} очков`, inline: true }
-                )
-                .setTimestamp()
-                .setFooter({ text: `Квест завершен`, iconURL: message.author.displayAvatarURL() });
-            
-            // Отправляем уведомление в тот же канал
-            message.reply({ embeds: [questCompletedEmbed], ephemeral: true });
-            
-            // Отправляем уведомление пользователю
-            notificationSystem.sendQuestNotification(message.author.id, {
-                name: 'Активный участник',
-                description: 'Отправил десять сообщений',
-                reward: { points: tenMessagesQuestResult.reward || 0 },
-                type: 'message'
-            }).catch(error => {
-                console.error('Ошибка при отправке уведомления о квесте:', error);
-            });
-        }
-    } catch (error) {
-        console.error('Ошибка при обновлении прогресса квеста:', error);
-    }
-    
-    // Проверяем автоматическую модерацию
-    try {
-        const { getGuildModerationConfig, checkMessageContent, checkSpam, applyModerationAction } = require('./System/moderationSystem');
-        const moderationConfig = getGuildModerationConfig(message.guild.id);
-        
-        // Если автомодерация включена
-        if (moderationConfig.automod.enabled) {
-            // Проверяем содержимое сообщения
-            const checkResult = checkMessageContent(message, moderationConfig);
-            
-            // Проверяем спам
-            const isSpam = checkSpam(message.author.id, message);
-            if (isSpam) {
-                checkResult.spam = true;
-                checkResult.severity += 2;
+            // Обновляем прогресс квеста на отправку сообщений по типу
+            try {
+                require('./System/userProfiles').updateQuestProgressByType(message.author.id, 'message', 1);
+            } catch (error) {
+                console.error('Ошибка при обновлении прогресса квеста на сообщения:', error);
             }
             
-            // Если обнаружены нарушения
-            if (checkResult.severity > 0) {
-                // Определяем действие на основе количества предупреждений пользователя
-                const { getUserProfile } = require('./System/userProfiles');
-                const user = getUserProfile(message.author.id);
-                const warnings = user.warnings || 0;
+            // Если пользователь состоит в гильдии, добавляем опыт гильдии
+            const userGuild = require('./System/guildSystem').getUserGuild(message.author.id);
+            if (userGuild) {
+                require('./System/guildSystem').addGuildExperience(userGuild.id, 0.5); // 0.5 очка опыта за сообщение
+            }
+            
+            // Если квест был завершен, отправляем уведомление
+            if (firstMessageQuestResult && firstMessageQuestResult.completed) {
+                const questCompletedEmbed = new EmbedBuilder()
+                    .setTitle('🏆 Квест выполнен!')
+                    .setColor('#f1c40f')
+                    .setDescription(`Поздравляем! Вы выполнили квест: **${'Первое сообщение'}**`)
+                    .addFields(
+                        { name: 'Награда', value: `${firstMessageQuestResult.reward || 0} очков`, inline: true }
+                    )
+                    .setTimestamp()
+                    .setFooter({ text: `Квест завершен`, iconURL: message.author.displayAvatarURL() });
                 
-                let action = null;
-                if (warnings >= moderationConfig.automod.actions.ban) {
-                    action = 'ban';
-                } else if (warnings >= moderationConfig.automod.actions.kick) {
-                    action = 'kick';
-                } else if (warnings >= moderationConfig.automod.actions.mute) {
-                    action = 'mute';
-                } else if (warnings >= moderationConfig.automod.actions.warn) {
-                    action = 'warn';
+                // Отправляем уведомление в тот же канал
+                message.reply({ embeds: [questCompletedEmbed], ephemeral: true });
+                
+                // Отправляем уведомление пользователю
+                notificationSystem.sendQuestNotification(message.author.id, {
+                    name: 'Первое сообщение',
+                    description: 'Отправил первое сообщение',
+                    reward: { points: firstMessageQuestResult.reward || 0 },
+                    type: 'message'
+                }).catch(error => {
+                    console.error('Ошибка при отправке уведомления о квесте:', error);
+                });
+            } else if (tenMessagesQuestResult && tenMessagesQuestResult.completed) {
+                const questCompletedEmbed = new EmbedBuilder()
+                    .setTitle('🏆 Квест выполнен!')
+                    .setColor('#f1c40f')
+                    .setDescription(`Поздравляем! Вы выполнили квест: **${'Активный участник'}**`)
+                    .addFields(
+                        { name: 'Награда', value: `${tenMessagesQuestResult.reward || 0} очков`, inline: true }
+                    )
+                    .setTimestamp()
+                    .setFooter({ text: `Квест завершен`, iconURL: message.author.displayAvatarURL() });
+                
+                // Отправляем уведомление в тот же канал
+                message.reply({ embeds: [questCompletedEmbed], ephemeral: true });
+                
+                // Отправляем уведомление пользователю
+                notificationSystem.sendQuestNotification(message.author.id, {
+                    name: 'Активный участник',
+                    description: 'Отправил десять сообщений',
+                    reward: { points: tenMessagesQuestResult.reward || 0 },
+                    type: 'message'
+                }).catch(error => {
+                    console.error('Ошибка при отправке уведомления о квесте:', error);
+                });
+            }
+        } catch (error) {
+            console.error('Ошибка при обновлении прогресса квеста:', error);
+        }
+        
+        // Проверяем автоматическую модерацию
+        try {
+            const guildSettingsModule = require('./System/guildSettings');
+            const guildSettings = guildSettingsModule.getGuildSettings(message.guild.id);
+            
+            // Если автомодерация включена
+            if (guildSettings.automod.enabled) {
+                // Проверяем содержимое сообщения
+                const { checkMessageContent, checkSpam, applyModerationAction } = require('./System/moderationSystem');
+                const checkResult = checkMessageContent(message, guildSettings);
+                
+                // Проверяем спам
+                const isSpam = checkSpam(message.author.id, message);
+                if (isSpam) {
+                    checkResult.spam = true;
+                    checkResult.severity += 2;
                 }
                 
-                if (action) {
-                    // Удаляем сообщение
-                    await message.delete().catch(() => {});
+                // Если обнаружены нарушения
+                if (checkResult.severity > 0) {
+                    // Определяем действие на основе количества предупреждений пользователя
+                    const { getUserProfile } = require('./System/userProfiles');
+                    const user = getUserProfile(message.author.id);
+                    const warnings = user.warnings || 0;
                     
-                    // Применяем действие
-                    let reason = 'Нарушение правил сервера';
-                    if (checkResult.profanity) reason = 'Использование ненормативной лексики';
-                    if (checkResult.links) reason = 'Отправка запрещенных ссылок';
-                    if (checkResult.spam) reason = 'Спам';
-                    if (checkResult.caps) reason = 'Использование капса';
-                    if (checkResult.invites) reason = 'Отправка приглашений на другие серверы';
+                    let action = null;
+                    if (warnings >= guildSettings.automod.actions.ban) {
+                        action = 'ban';
+                    } else if (warnings >= guildSettings.automod.actions.kick) {
+                        action = 'kick';
+                    } else if (warnings >= guildSettings.automod.actions.mute) {
+                        action = 'mute';
+                    } else if (warnings >= guildSettings.automod.actions.warn) {
+                        action = 'warn';
+                    }
                     
-                    await applyModerationAction(message, action, reason, checkResult.severity);
-                } else {
-                    // Просто удаляем сообщение если не достигнут порог предупреждений
-                    await message.delete().catch(() => {});
-                    
-                    // Отправляем пользователю предупреждение
-                    try {
-                        const warningEmbed = new EmbedBuilder()
-                            .setTitle('⚠️ Предупреждение')
-                            .setDescription(`Ваше сообщение на сервере **${message.guild.name}** было удалено за нарушение правил`)
-                            .addFields(
-                                { name: 'Причина', value: checkResult.profanity ? 'Ненормативная лексика' :
-                                    checkResult.links ? 'Запрещенная ссылка' :
-                                    checkResult.spam ? 'Спам' :
-                                    checkResult.caps ? 'Капс' :
-                                    checkResult.invites ? 'Приглашение на другой сервер' : 'Нарушение правил', inline: true }
-                            )
-                            .setColor('#FFA50')
-                            .setTimestamp();
+                    if (action) {
+                        // Удаляем сообщение
+                        await message.delete().catch(() => {});
                         
-                        await message.author.send({ embeds: [warningEmbed] });
-                    } catch (error) {
-                        // Не удалось отправить личное сообщение
-                        console.log(`Не удалось отправить предупреждение пользователю ${message.author.id}`);
+                        // Применяем действие
+                        let reason = 'Нарушение правил сервера';
+                        if (checkResult.profanity) reason = 'Использование ненормативной лексики';
+                        if (checkResult.links) reason = 'Отправка запрещенных ссылок';
+                        if (checkResult.spam) reason = 'Спам';
+                        if (checkResult.caps) reason = 'Использование капса';
+                        if (checkResult.invites) reason = 'Отправка приглашений на другие серверы';
+                        
+                        await applyModerationAction(message, action, reason, checkResult.severity);
+                    } else {
+                        // Просто удаляем сообщение если не достигнут порог предупреждений
+                        await message.delete().catch(() => {});
+                        
+                        // Отправляем пользователю предупреждение
+                        try {
+                            const warningEmbed = new EmbedBuilder()
+                                .setTitle('⚠️ Предупреждение')
+                                .setDescription(`Ваше сообщение на сервере **${message.guild.name}** было удалено за нарушение правил`)
+                                .addFields(
+                                    { name: 'Причина', value: checkResult.profanity ? 'Ненормативная лексика' :
+                                        checkResult.links ? 'Запрещенная ссылка' :
+                                        checkResult.spam ? 'Спам' :
+                                        checkResult.caps ? 'Капс' :
+                                        checkResult.invites ? 'Приглашение на другой сервер' : 'Нарушение правил', inline: true }
+                                )
+                                .setColor('#FFA50')
+                                .setTimestamp();
+                            
+                            await message.author.send({ embeds: [warningEmbed] });
+                        } catch (error) {
+                            // Не удалось отправить личное сообщение
+                            console.log(`Не удалось отправить предупреждение пользователю ${message.author.id}`);
+                        }
                     }
                 }
             }
+        } catch (moderationError) {
+            console.error('Ошибка при проверке автомодерации:', moderationError);
         }
-    } catch (moderationError) {
-        console.error('Ошибка при проверке автомодерации:', moderationError);
-    }
 });
 
 // Обработка события присоединения участника к серверу

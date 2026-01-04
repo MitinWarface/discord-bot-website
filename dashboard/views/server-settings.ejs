@@ -230,10 +230,8 @@
                     <li><a href="#">Модерация</a></li>
                     <li><a href="#">Уровни</a></li>
                     <li><a href="#">Экономика</a></li>
-                    <li><a href="#">Квесты</a></li>
-                    <li><a href="#">Гильдии</a></li>
                     <li><a href="#">Тикеты</a></li>
-                    <li><a href="#">Логирование</a></li>
+                    <li><a href="#">События</a></li>
                 </ul>
             </div>
 
@@ -244,7 +242,7 @@
                         <label for="prefix">Префикс команд</label>
                         <input type="text" id="prefix" name="prefix" value="<%= settings.prefix %>">
                     </div>
-
+            
                     <div class="form-group">
                         <h3>Модерация</h3>
                         <div class="checkbox-group">
@@ -266,8 +264,18 @@
                             <input type="checkbox" id="automod-spam" name="automod[filter][spam]" <%= settings.automod.filter.spam ? 'checked' : '' %>>
                             <label for="automod-spam">Фильтр спама</label>
                         </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="automod-caps" name="automod[filter][caps]" <%= settings.automod.filter.caps ? 'checked' : '' %>>
+                            <label for="automod-caps">Фильтр капса</label>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="automod-invites" name="automod[filter][invites]" <%= settings.automod.filter.invites ? 'checked' : '' %>>
+                            <label for="automod-invites">Фильтр приглашений на другие серверы</label>
+                        </div>
                     </div>
-
+            
                     <div class="form-group">
                         <h3>Логирование</h3>
                         <div class="checkbox-group">
@@ -275,14 +283,48 @@
                             <label for="logging-enabled">Включить логирование</label>
                         </div>
                         
-                        <label for="log-channel">Канал для логов</label>
-                        <select id="log-channel" name="logging[channel]">
-                            <option value="">Выберите канал</option>
-                            <option value="123456789" <%= settings.logging.channel === '123456789' ? 'selected' : '' %>>#mod-logs</option>
-                            <option value="987654321" <%= settings.logging.channel === '987654321' ? 'selected' : '' %>>#server-logs</option>
-                        </select>
+                        <label for="log-channel">ID канала для логов</label>
+                        <input type="text" id="log-channel" name="logging[logChannel]" value="<%= settings.logging.logChannel || '' %>">
+                        <p style="font-size: 12px; opacity: 0.7; margin-top: 5px;">Введите ID текстового канала для отправки логов</p>
                     </div>
-
+            
+                    <div class="form-group">
+                        <h3>Система уровней</h3>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="leveling-enabled" name="leveling[enabled]" <%= settings.leveling.enabled ? 'checked' : '' %>>
+                            <label for="leveling-enabled">Включить систему уровней</label>
+                        </div>
+                        
+                        <label for="xp-min">Минимальное количество XP за сообщение</label>
+                        <input type="number" id="xp-min" name="leveling[xpPerMessageMin]" value="<%= settings.leveling.xpPerMessageMin %>" min="1" max="100">
+                        
+                        <label for="xp-max">Максимальное количество XP за сообщение</label>
+                        <input type="number" id="xp-max" name="leveling[xpPerMessageMax]" value="<%= settings.leveling.xpPerMessageMax %>" min="1" max="100">
+                    </div>
+            
+                    <div class="form-group">
+                        <h3>Экономика</h3>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="economy-enabled" name="economy[enabled]" <%= settings.economy.enabled ? 'checked' : '' %>>
+                            <label for="economy-enabled">Включить экономическую систему</label>
+                        </div>
+                        
+                        <label for="daily-amount">Количество монет за ежедневную награду</label>
+                        <input type="number" id="daily-amount" name="economy[dailyAmount]" value="<%= settings.economy.dailyAmount %>" min="1" max="1000">
+                    </div>
+            
+                    <div class="form-group">
+                        <h3>Система тикетов</h3>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="tickets-enabled" name="tickets[enabled]" <%= settings.tickets.enabled ? 'checked' : '' %>>
+                            <label for="tickets-enabled">Включить систему тикетов</label>
+                        </div>
+                        
+                        <label for="tickets-category">ID категории для тикетов</label>
+                        <input type="text" id="tickets-category" name="tickets[categoryId]" value="<%= settings.tickets.categoryId || '' %>">
+                        <p style="font-size: 12px; opacity: 0.7; margin-top: 5px;">Введите ID категории, в которой будут создаваться тикеты</p>
+                    </div>
+            
                     <button type="submit" class="btn">Сохранить настройки</button>
                 </form>
             </div>

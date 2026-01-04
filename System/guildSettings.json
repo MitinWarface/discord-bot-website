@@ -1,0 +1,57 @@
+{
+  "exampleGuildId": {
+    "prefix": "!",
+    "automod": {
+      "enabled": false,
+      "filter": {
+        "profanity": false,
+        "links": false,
+        "spam": false,
+        "caps": false,
+        "invites": false
+      },
+      "actions": {
+        "warn": 3,
+        "mute": 5,
+        "kick": 8,
+        "ban": 10
+      }
+    },
+    "leveling": {
+      "enabled": true,
+      "xpPerMessageMin": 5,
+      "xpPerMessageMax": 15,
+      "xpCooldownMs": 60000
+    },
+    "economy": {
+      "enabled": true,
+      "dailyAmount": 100,
+      "workEnabled": true
+    },
+    "logging": {
+      "enabled": false,
+      "logChannel": null,
+      "events": {
+        "messageDelete": true,
+        "messageUpdate": true,
+        "memberJoin": true,
+        "memberLeave": true,
+        "memberBan": true,
+        "memberUnban": true,
+        "memberRoleAdd": true,
+        "memberRoleRemove": true,
+        "memberNicknameUpdate": true,
+        "voiceStateUpdate": true
+      }
+    },
+    "tickets": {
+      "enabled": true,
+      "categoryId": null,
+      "supportRoleId": null
+    },
+    "events": {
+      "enabled": true,
+      "announcementChannel": null
+    }
+  }
+}

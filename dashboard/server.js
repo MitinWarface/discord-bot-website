@@ -24,15 +24,31 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Настройка стратегии аутентификации Discord
+const axios = require('axios');
+
 passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
     callbackURL: `${process.env.BASE_URL || 'http://localhost:3000'}/auth/callback`,
-    scope: ['identify', 'guilds']
+    scope: ['identify', 'guilds', 'guilds.join']
 }, async (accessToken, refreshToken, profile, done) => {
     try {
-        // Здесь можно добавить логику сохранения пользователя в базу данных
-        // Пока просто возвращаем профиль пользователя
+        // Добавляем токен доступа к профилю для последующего использования
+        profile.accessToken = accessToken;
+        
+        // Получаем информацию о серверах пользователя
+        try {
+            const response = await axios.get('https://discord.com/api/users/@me/guilds', {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+            profile.guilds = response.data;
+        } catch (guildsError) {
+            console.error('Ошибка при получении серверов пользователя:', guildsError.message);
+            profile.guilds = [];
+        }
+        
         return done(null, profile);
     } catch (error) {
         return done(error, null);
@@ -103,9 +119,9 @@ app.get('/', ensureAuth, (req, res) => {
 // Страница управления серверами
 app.get('/servers', ensureAuth, async (req, res) => {
     try {
-        // Здесь должна быть логика получения серверов, где пользователь администратор
-        // Пока просто возвращаем пустой массив
+        // Получаем серверы, на которых пользователь является администратором
         const userGuilds = req.user.guilds || [];
+        console.log('Полученные сервера пользователя из профиля:', userGuilds); // Для отладки
         
         // Фильтруем серверы, где пользователь имеет права администратора
         const adminGuilds = userGuilds.filter(guild => {
@@ -114,7 +130,9 @@ app.get('/servers', ensureAuth, async (req, res) => {
             return (permissions & 0x8) === 0x8; // ADMINISTRATOR_PERMISSION = 0x8
         });
         
-        res.render('servers', { 
+        console.log('Сервера с правами администратора:', adminGuilds); // Для отладки
+        
+        res.render('servers', {
             user: req.user,
             servers: adminGuilds,
             baseURL: process.env.BASE_URL || 'http://localhost:3000'
@@ -138,26 +156,11 @@ app.get('/server/:id', ensureAuth, async (req, res) => {
             return res.status(403).send('Нет доступа к этому серверу');
         }
         
-        // Здесь должна быть логика получения настроек сервера из базы данных
-        // Пока просто возвращаем пустой объект настроек
-        const guildSettings = {
-            name: userGuild.name,
-            prefix: '!',
-            automod: {
-                enabled: false,
-                filter: {
-                    profanity: false,
-                    links: false,
-                    spam: false
-                }
-            },
-            logging: {
-                enabled: false,
-                channel: null
-            }
-        };
+        // Получаем реальные настройки сервера из системы настроек
+        const guildSettingsModule = require('../System/guildSettings');
+        const guildSettings = guildSettingsModule.getGuildSettings(guildId);
         
-        res.render('server-settings', { 
+        res.render('server-settings', {
             user: req.user,
             server: userGuild,
             settings: guildSettings,
@@ -183,8 +186,10 @@ app.post('/api/server/:id/settings', ensureAuth, express.json(), async (req, res
             return res.status(403).json({ error: 'Нет доступа к этому серверу' });
         }
         
-        // Здесь должна быть логика сохранения настроек в базе данных
-        // Пока просто возвращаем успех
+        // Сохраняем настройки сервера с помощью новой системы
+        const guildSettingsModule = require('../System/guildSettings');
+        guildSettingsModule.setGuildSettings(guildId, settings);
+        
         console.log(`Обновлены настройки сервера ${guildId}:`, settings);
         
         res.json({ success: true, message: 'Настройки обновлены успешно' });

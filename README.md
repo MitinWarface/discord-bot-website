@@ -167,6 +167,18 @@ OPENWEATHER_API_KEY=YOUR_WEATHER_API_KEY
 
 Теперь OAuth2 авторизация будет работать корректно.
 
+### Настройка Redirect URI в Discord Developer Portal
+
+Чтобы избежать ошибки 400 при OAuth2 авторизации, убедитесь, что вы добавили правильный Redirect URI в настройках вашего Discord приложения:
+
+1. Перейдите на [Discord Developer Portal](https://discord.com/developers/applications)
+2. Выберите ваше приложение
+3. Перейдите в раздел "OAuth2" → "Redirects"
+4. Нажмите "Add Redirect" и введите: `http://localhost:3000/auth/callback`
+5. Нажмите "Save Changes"
+
+Это позволит Discord перенаправлять пользователей обратно на вашу панель управления после аутентификации.
+
 ---
 
 ## ▶️ Запуск
