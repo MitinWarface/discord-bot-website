@@ -24,16 +24,6 @@ const client = new Client({
     ],
 });
 
-// // Проверяем, что у нас есть корректная конфигурация узлов Lavalink
-// if (!lavalinkConfig.nodes || !Array.isArray(lavalinkConfig.nodes) || lavalinkConfig.nodes.length === 0) {
-//     console.error('Ошибка: Не найдена корректная конфигурация узлов Lavalink');
-//     console.error('lavalinkConfig.nodes:', lavalinkConfig.nodes);
-//     process.exit(1);
-// }
-
-// // Добавляем логирование для отладки
-// // console.log('Конфигурация Lavalink:', JSON.stringify(lavalinkConfig.nodes, null, 2));
-
 // Инициализируем Lavalink
 initializeLavalink(client, lavalinkConfig);
 
@@ -49,32 +39,37 @@ const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('
 
 const commands = [];
 
+// Список команд, которые содержат подкоманды и могут вызвать ошибки
+const commandsWithSubcommands = [
+    'automod.js', 'customcommand.js', 'economy.js', 'event.js', 'events.js', 
+    'games.js', 'guild.js', 'level.js', 'logging.js', 'quests.js',
+    'reactionrole.js', 'serverstats.js', 'ticket.js'
+];
+
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const commandModule = require(filePath);
     
-    // Проверяем, является ли экспорт действительной командой
+    // Пропускаем команды, которые содержат подкоманды
+    if (commandsWithSubcommands.includes(file)) {
+        console.log(`Пропускаем команду с подкомандами: ${file}`);
+        continue;
+    }
+    
+    // Проверяем, является ли экспорт обычной командой (имеет data и execute)
     if (commandModule && typeof commandModule === 'object' && commandModule.data && commandModule.execute) {
         // Это обычная команда
         client.commands.set(commandModule.data.name, commandModule);
         commands.push(commandModule.data.toJSON());
-    } else if (commandModule && typeof commandModule === 'object') {
-        // Это модуль с несколькими командами (например, с вложенными экспортами)
-        // Проверяем каждое свойство объекта
-        for (const [key, value] of Object.entries(commandModule)) {
-            // Пропускаем служебные свойства
-            if (key === 'default' || key === '__esModule') continue;
-            
-            if (value && typeof value === 'object' && value.data && value.execute) {
-                // Это вложенная команда
-                client.commands.set(value.data.name, value);
-                commands.push(value.data.toJSON());
-            }
-        }
-    } else {
-        // Ни одна из команд не найдена
+        console.log(`Загружена команда: ${commandModule.data.name}`);
+    } 
+    // Если это не обычная команда, пропускаем
+    else {
         console.log(`Предупреждение: Файл команды ${file} не экспортирует действительную команду, пропускаем...`);
     }
+    
+    // Удаляем кэш модуля, чтобы избежать проблем при последующих чтениях
+    delete require.cache[require.resolve(filePath)];
 }
 
 // Обработка события готовности бота
@@ -528,8 +523,8 @@ client.on(Events.InteractionCreate, async interaction => {
                         nextDaily.setDate(nextDaily.getDate() + 1); // Следующая награда завтра
                         
                         const timeUntilNext = nextDaily - Date.now();
-                        const hours = Math.floor(timeUntilNext / (1000 * 60 * 60));
-                        const minutes = Math.floor((timeUntilNext % (1000 * 60 * 60)) / (1000 * 60));
+                        const hours = Math.floor(timeUntilNext / (1000 * 60));
+                        const minutes = Math.floor((timeUntilNext % (100 * 60)) / (1000 * 60));
                         
                         const dailyEmbed = new EmbedBuilder()
                             .setTitle('⏳ Ежедневная награда')
@@ -889,8 +884,8 @@ client.on(Events.InteractionCreate, async interaction => {
                         nextRep.setDate(nextRep.getDate() + 1); // Следующая репутация завтра
                         
                         const timeUntilNext = nextRep - Date.now();
-                        const hours = Math.floor(timeUntilNext / (1000 * 60 * 60));
-                        const minutes = Math.floor((timeUntilNext % (1000 * 60 * 60)) / (1000 * 60));
+                        const hours = Math.floor(timeUntilNext / (1000 * 60));
+                        const minutes = Math.floor((timeUntilNext % (100 * 60)) / (1000 * 60));
                         
                         const repEmbed = new EmbedBuilder()
                             .setTitle('⏰ Репутация')
@@ -1028,7 +1023,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     const eventsToShow = allActiveEvents.slice(0, 10); // Показываем только первые 10 событий
                     
                     for (const event of eventsToShow) {
-                        const timeLeft = Math.floor((new Date(event.dateTime) - new Date()) / (1000 * 60 * 60)); // Разница в часах
+                        const timeLeft = Math.floor((new Date(event.dateTime) - new Date()) / (1000 * 60)); // Разница в часах
                         let timeLeftStr = '';
                         
                         if (timeLeft > 0) {
@@ -1864,4 +1859,4 @@ setInterval(async () => {
     } catch (error) {
         console.error('Ошибка при проверке предстоящих событий:', error);
     }
-}, 15 * 60 * 10); // 15 минут в миллисекундах
+}, 15 * 60 * 100); // 15 минут в миллисекундах
