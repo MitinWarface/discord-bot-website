@@ -146,6 +146,27 @@ DISCORD_CLIENT_SECRET=YOUR_DISCORD_APP_CLIENT_SECRET
 OPENWEATHER_API_KEY=YOUR_WEATHER_API_KEY
 ```
 
+### Настройка OAuth2 для дашборда
+
+Для правильной работы веб-панели управления с аутентификацией через Discord, выполните следующие шаги:
+
+1. Перейдите на [Discord Developer Portal](https://discord.com/developers/applications)
+2. Создайте новое приложение или используйте существующее
+3. Перейдите во вкладку "OAuth2" → "General"
+4. Скопируйте `Client ID` и `Client Secret` и вставьте их в файл `.env`:
+   ```env
+   DISCORD_CLIENT_ID=ВАШ_CLIENT_ID
+   DISCORD_CLIENT_SECRET=ВАШ_CLIENT_SECRET
+   ```
+5. В той же вкладке "OAuth2" перейдите в "Redirects"
+6. Добавьте URI перенаправления: `http://localhost:3000/auth/callback` (или ваш домен)
+7. Убедитесь, что в файле `.env` установлен правильный `BASE_URL`:
+   ```env
+   BASE_URL=http://localhost:3000
+   ```
+
+Теперь OAuth2 авторизация будет работать корректно.
+
 ---
 
 ## ▶️ Запуск
