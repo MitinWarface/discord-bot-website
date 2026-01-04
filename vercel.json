@@ -3,48 +3,42 @@
   "name": "discord-bot-dashboard",
   "builds": [
     {
-      "src": "index.js",
+      "src": "api/server.js",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["**/*"]
-      }
-    },
-    {
-      "src": "dashboard/server.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["**/*"]
+        "includeFiles": ["**/*"],
+        "nodeVersion": "18.x"
       }
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "dashboard/server.js"
+      "dest": "api/server.js"
     },
     {
       "src": "/auth/(.*)",
-      "dest": "dashboard/server.js"
+      "dest": "api/server.js"
     },
     {
       "src": "/commands",
-      "dest": "dashboard/server.js"
+      "dest": "api/server.js"
     },
     {
       "src": "/info",
-      "dest": "dashboard/server.js"
+      "dest": "api/server.js"
     },
     {
       "src": "/servers",
-      "dest": "dashboard/server.js"
+      "dest": "api/server.js"
     },
     {
       "src": "/server/(.*)",
-      "dest": "dashboard/server.js"
+      "dest": "api/server.js"
     },
     {
       "src": "/(.*)",
-      "dest": "dashboard/server.js"
+      "dest": "api/server.js"
     }
-  ]
+ ]
 }
